@@ -1,0 +1,150 @@
+# MongoDB 配置
+mongo:
+  username: admin
+  password: admin123
+  host: localhost
+  port: 27017
+  db_name: virtualsite
+
+# MinIO 配置
+minio:
+  username: minioadmin
+  password: minioadmin
+  host: localhost
+  port: 9000
+
+# Redis 配置
+redis:
+  host: localhost
+  port: 6379
+  db: 0
+  password: null
+  verification_code_expire: 300  # 验证码过期时间（秒）
+
+# 转换程序配置
+converter:
+  path: /Users/zhouzal/Downloads/HOOPS_Exchange_2025.3.0/samples/exchange/exchangesource/ImportExport
+  program_name: ImportExport
+  default_output_format: GLB
+
+# 阿里云短信配置
+aliyun_sms:
+  access_key_id: LTAI5tCMwDMqELaaEFDB6ci4
+  access_key_secret: KcsGM6Y9bSkQhI8bqL1SV6tMZVm04x
+  sign_name: 广州方象智能科技
+  template_code: SMS_317950062
+  template_param: '{"code": "%s"}'
+
+# JWT配置
+jwt:
+  secret_key: pMOgjX8DbO2iaDoJvk1Ph_cnjveVHzn-APh2JGpsZBw
+  algorithm: HS256
+  access_token_expire_minutes: 30
+
+# 文件格式限制
+file_formats:
+  - format: 3MF
+    version: 1.2.3
+    extensions: [3MF]
+  - format: ACIS
+    version: Up to 2023
+    extensions: [SAT, SAB]
+  - format: AutoCAD - 2D
+    version: Up to AutoCAD 2024
+    extensions: [DWG, DXF]
+  - format: AutoCAD - 3D
+    version: Up to AutoCAD 2024
+    extensions: [DWG, DXF]
+  - format: Autodesk 3DS
+    version: Any
+    extensions: [3DS]
+  - format: Autodesk DWF
+    version: Any
+    extensions: [DWF, DWFX]
+  - format: Autodesk Inventor
+    version: Up to 2025
+    extensions: [IPT, IAM]
+  - format: Autodesk Navisworks
+    version: From 2012 to 2025
+    extensions: [NWD]
+  - format: CATIA V4
+    version: Up to 4.2.5
+    extensions: [MODEL, SESSION, DLV, EXP]
+  - format: CATIA V5
+    version: Up to V5_6R2024
+    extensions: [CATDrawing, CATPart, CATProduct, CATShape, CGR]
+  - format: CATIA V6 / 3DExperience
+    version: Up to V5_6R2024
+    extensions: [3DXML]
+  - format: COLLADA
+    version: Any
+    extensions: [DAE]
+  - format: Creo - Pro/E
+    version: Pro/Engineer 19.0 to Creo 11.0
+    extensions: [ASM, NEU, PRT, XAS, XPR]
+  - format: DGN
+    version: 7, 8
+    extensions: [DGN]
+  - format: FBX
+    version: "ASCII: from 7100 to 7500, Binary: All"
+    extensions: [FBX]
+  - format: GL Transmission Format
+    version: Version 2.0 only
+    extensions: [GLTF, GLB]
+  - format: I-deas
+    version: Up to 13.x (NX 5), NX I-deas 6
+    extensions: [MF1, ARC, UNV, PKG]
+  - format: IFC
+    version: IFC2 up to 2.3.0.1, IFC4 up to 4.3
+    extensions: [IFC, IFCZIP]
+  - format: IGES
+    version: 5.1, 5.2, 5.3
+    extensions: [IGS, IGES]
+  - format: JT
+    version: Up to v10.9
+    extensions: [JT]
+  - format: NX - Unigraphics
+    version: UG11 to UG18, UG NX, NX5 to NX12, NX1847 to NX2412
+    extensions: [PRT]
+  - format: Parasolid
+    version: Up to 37.1
+    extensions: [X_B, X_T, XMT, XMT_TXT]
+  - format: PDF
+    version: All Versions
+    extensions: [PDF]
+  - format: PRC
+    version: All Versions
+    extensions: [PRC]
+  - format: Revit
+    version: 2015 to 2025
+    extensions: [RVT, RFA]
+  - format: Rhino3D
+    version: From 4 to 8
+    extensions: [3DM]
+  - format: Solid Edge
+    version: 1 to 20, ST1 to ST10, 2019 to 2025
+    extensions: [ASM, PAR, PWD, PSM]
+  - format: SolidWorks
+    version: From 97 up to 2025
+    extensions: [SLDASM, SLDPRT]
+  - format: STEP
+    version: AP 203 Ed1, Ed2, AP 214, AP 242 Ed1, Ed2, Ed3
+    extensions: [STP, STEP, STPZ]
+  - format: STEP/XML
+    version: Any
+    extensions: [STPX, STPXZ]
+  - format: Stereo Lithography (STL)
+    version: All Versions
+    extensions: [STL]
+  - format: U3D
+    version: ECMA-363
+    extensions: [U3D]
+  - format: VDA-FS
+    version: Version 1.0 and 2.0
+    extensions: [VDA]
+  - format: VRML
+    version: V1.0 and V2.0
+    extensions: [WRL, VRML]
+  - format: Wavefront OBJ
+    version: Any
+    extensions: [OBJ] 

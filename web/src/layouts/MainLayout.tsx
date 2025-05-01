@@ -1,0 +1,269 @@
+import {
+  GithubFilled,
+  InfoCircleFilled,
+  QuestionCircleFilled,
+  HomeOutlined,
+  AppstoreOutlined,
+  DatabaseOutlined,
+  FileOutlined,
+  TagsOutlined,
+  FileTextOutlined,
+  PaperClipOutlined,
+  LogoutOutlined,
+  UserOutlined,
+  PictureOutlined,
+  RobotOutlined,
+  ShoppingOutlined,
+} from '@ant-design/icons';
+import type { ProSettings } from '@ant-design/pro-components';
+import { PageContainer, ProCard, ProLayout } from '@ant-design/pro-components';
+import { Input, Dropdown, App } from 'antd';
+import { useState, useEffect } from 'react';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { authAPI } from '../services/api';
+
+const MainLayout = () => {
+  const { message } = App.useApp();
+  const settings: ProSettings | undefined = {
+    fixSiderbar: true,
+    layout: 'mix',
+    splitMenus: true,
+  };
+
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [pathname, setPathname] = useState(location.pathname);
+  const [username, setUsername] = useState<string>('');
+  const [hasPassword, setHasPassword] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    // 获取用户信息
+    const fetchUserInfo = async () => {
+      try {
+        const response = await authAPI.getCurrentUser();
+        setUsername(response.data.username);
+        
+        // 检查用户是否有密码
+        const passwordResponse = await authAPI.checkHasPassword();
+        setHasPassword(passwordResponse.data.has_password);
+        
+        // 如果用户没有密码且不在设置页面，显示提示
+        if (!passwordResponse.data.has_password && pathname !== '/settings') {
+          message.warning('您尚未设置密码，请前往用户设置页面设置初始密码');
+        }
+      } catch (error) {
+        console.error('获取用户信息失败', error);
+      }
+    };
+
+    fetchUserInfo();
+  }, [pathname]);
+
+  const handleLogout = async () => {
+    try {
+      await authAPI.logout();
+      localStorage.removeItem('token');
+      message.success('退出登录成功');
+      navigate('/login');
+    } catch (error) {
+      message.error('退出登录失败，请重试');
+    }
+  };
+
+  // 路由菜单配置
+  const route = {
+    path: '/',
+    routes: [
+      {
+        path: '/home',
+        name: '首页',
+        icon: <HomeOutlined />,
+      },
+      {
+        path: '/models',
+        name: '模型管理',
+        icon: <AppstoreOutlined />,
+        routes: [
+          {
+            path: '/models/list',
+            name: '模型列表',
+            icon: <FileOutlined />,
+          },
+          {
+            path: '/models/tasks',
+            name: '任务列表',
+            icon: <TagsOutlined />,
+          },
+          {
+            path: '/models/materials',
+            name: '材质列表',
+            icon: <AppstoreOutlined />,
+          },
+          // {
+          //   path: '/models/store',
+          //   name: 'Sketchfab商店',
+          //   icon: <ShoppingOutlined />,
+          // }
+        ],
+      },
+      {
+        path: '/scenes',
+        name: '场景管理',
+        icon: <PictureOutlined />,
+      },
+      {
+        path: '/data',
+        name: '数据管理',
+        icon: <DatabaseOutlined />,
+        routes: [
+          {
+            path: '/data/metadata',
+            name: '元数据管理',
+            icon: <FileTextOutlined />,
+          },
+          {
+            path: '/data/attachments',
+            name: '附件管理',
+            icon: <PaperClipOutlined />,
+          },
+          {
+            path: '/data/template',
+            name: '数据模板',
+            icon: <FileTextOutlined />,
+          },
+          {
+            path: '/data/iot',
+            name: 'IoT数据',
+            icon: <AppstoreOutlined />,
+          },
+          {
+            path: '/data/video',
+            name: '视频流数据',
+            icon: <PictureOutlined />,
+          },
+          {
+            path: '/data/gis',
+            name: 'GIS数据',
+            icon: <AppstoreOutlined />,
+          },
+          {
+            path: '/data/erp',
+            name: 'ERP数据',
+            icon: <AppstoreOutlined />,
+          },
+          {
+            path: '/data/instances',
+            name: '模型实例',
+            icon: <AppstoreOutlined />,
+          },
+        ],
+      },
+      {
+        path: '/agent',
+        name: '智能体',
+        icon: <RobotOutlined />,
+      },
+      {
+        path: '/settings',
+        name: '用户设置',
+        icon: <UserOutlined />,
+      },
+    ],
+  };
+
+  return (
+    <div
+      id="test-pro-layout"
+      style={{
+        height: '100vh',
+      }}
+    >
+      <ProLayout
+        {...settings}
+        location={{
+          pathname,
+        }}
+        route={route}
+        menu={{
+          type: 'group',
+        }}
+        avatarProps={{
+          src: 'https://gw.alipayobjects.com/zos/antfincdn/efFD%24IOql2/weixintupian_20170331104822.jpg',
+          size: 'small',
+          title: username || '加载中...',
+          render: (props, dom) => {
+            return (
+              <Dropdown
+                menu={{
+                  items: [
+                    {
+                      key: 'logout',
+                      icon: <LogoutOutlined />,
+                      label: '退出登录',
+                      onClick: handleLogout,
+                    },
+                  ],
+                }}
+              >
+                {dom}
+              </Dropdown>
+            );
+          },
+        }}
+        actionsRender={(props) => {
+          if (props.isMobile) return [];
+          return [
+            <QuestionCircleFilled
+              key="help"
+              onClick={() => window.open('https://frontfidelity.yuque.com/cb9pxv/cirz3l?# 《灵境项目》', '_blank')}
+              style={{ fontSize: '16px', marginRight: '16px', cursor: 'pointer' }}
+            />,
+          ];
+        }}
+        menuFooterRender={(props) => {
+          if (props?.collapsed) return undefined;
+          return (
+            <div
+              style={{
+                textAlign: 'center',
+                paddingBlockStart: 12,
+              }}
+            >
+              <div>© 2024 灵境孪生中台</div>
+              <div>VirtualSite</div>
+            </div>
+          );
+        }}
+        onMenuHeaderClick={(e) => console.log(e)}
+        menuItemRender={(item, dom) => (
+          <div
+            onClick={() => {
+              setPathname(item.path || '/home');
+              navigate(item.path || '/home');
+            }}
+          >
+            {dom}
+          </div>
+        )}
+        title="灵境孪生中台"
+        logo="/logoonly.png"
+      >
+        <PageContainer
+        >
+          <ProCard
+            style={{
+              height: '100vh',
+              minHeight: 800,
+              
+            }}
+            
+          >
+            <Outlet />
+          </ProCard>
+        </PageContainer>
+      </ProLayout>
+    </div>
+  );
+};
+
+export default MainLayout; 

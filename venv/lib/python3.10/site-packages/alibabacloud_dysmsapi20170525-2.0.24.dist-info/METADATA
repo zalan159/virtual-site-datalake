@@ -1,0 +1,70 @@
+Metadata-Version: 2.1
+Name: alibabacloud-dysmsapi20170525
+Version: 2.0.24
+Summary: Alibaba Cloud Dysmsapi (20170525) SDK Library for Python
+Home-page: https://github.com/aliyun/alibabacloud-python-sdk
+Author: Alibaba Cloud SDK
+Author-email: sdk-team@alibabacloud.com
+License: Apache License 2.0
+Keywords: alibabacloud,dysmsapi20170525
+Platform: any
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Topic :: Software Development
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+Requires-Dist: alibabacloud-tea-util (<1.0.0,>=0.3.9)
+Requires-Dist: alibabacloud-tea-openapi (<1.0.0,>=0.3.6)
+Requires-Dist: alibabacloud-openapi-util (<1.0.0,>=0.2.1)
+Requires-Dist: alibabacloud-endpoint-util (<1.0.0,>=0.0.3)
+
+English | [简体中文](README-CN.md)
+![](https://aliyunsdk-pages.alicdn.com/icons/AlibabaCloud.svg)
+
+## Alibaba Cloud Dysmsapi SDK for Python
+
+## Requirements
+
+- Python >= 3.6
+
+## Installation
+
+- **Install with pip**
+
+Python SDK uses a common package management tool named `pip`. If pip is not installed, see the [pip user guide](https://pip.pypa.io/en/stable/installing/ "pip User Guide") to install pip.
+
+```bash
+# Install the alibabacloud_dysmsapi20170525
+pip install alibabacloud_dysmsapi20170525
+```
+
+## Issues
+
+[Opening an Issue](https://github.com/aliyun/alibabacloud-sdk/issues/new), Issues not conforming to the guidelines may be closed immediately.
+
+## Usage
+
+[Quick Examples](https://github.com/aliyun/alibabacloud-python-sdk/blob/master/docs/0-Usage-EN.md#quick-examples)
+
+## Changelog
+
+Detailed changes for each release are documented in the [release notes](./ChangeLog.md).
+
+## References
+
+- [Latest Release](https://github.com/aliyun/alibabacloud-sdk/tree/master/python)
+
+## License
+
+[Apache-2.0](http://www.apache.org/licenses/LICENSE-2.0)
+
+Copyright (c) 2009-present, Alibaba Cloud All rights reserved.
+
+
