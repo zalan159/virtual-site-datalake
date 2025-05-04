@@ -23,7 +23,7 @@ redis:
 
 # 转换程序配置
 converter:
-  path: /Users/zhouzal/Downloads/HOOPS_Exchange_2025.3.0/samples/exchange/exchangesource/ImportExport
+  path: D:\HOOPS_Exchange_Publish_2025.3.0_Win_VS2019\HOOPS_Exchange_Publish_2025.3.0\samples\exchange\exchangesource\ImportExport\x64\Release
   program_name: ImportExport
   default_output_format: GLB
 
