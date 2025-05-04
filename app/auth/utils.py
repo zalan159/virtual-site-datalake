@@ -7,8 +7,12 @@ from fastapi.security import OAuth2PasswordBearer
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 
-from config import MONGO_CONFIG, MONGO_URL, JWT_CONFIG
 from app.models.user import UserInDB, TokenData
+from dotenv import load_dotenv
+import os
+from app.utils.mongo_init import get_mongo_url
+# 加载 .env 文件
+load_dotenv()
 
 # 密码加密上下文
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -17,13 +21,14 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # JWT配置
-SECRET_KEY = JWT_CONFIG['secret_key']
-ALGORITHM = JWT_CONFIG['algorithm']
-ACCESS_TOKEN_EXPIRE_MINUTES = JWT_CONFIG['access_token_expire_minutes']
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+ALGORITHM = os.getenv("JWT_ALGORITHM")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES"))
 
 # MongoDB连接
+MONGO_URL = get_mongo_url()
 client = AsyncIOMotorClient(MONGO_URL)
-db = client[MONGO_CONFIG['db_name']]
+db = client[os.getenv("MONGO_DB_NAME")]
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)

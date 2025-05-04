@@ -8,15 +8,29 @@ from fastapi.responses import JSONResponse
 import traceback
 import sys
 
-from config import MONGO_CONFIG, MONGO_URL
+
 from app.routers import auth, files, tasks, sketchfab, attachments, metadata
 from app.models.user import UserRole
 from app.auth.utils import get_password_hash
 from app.core.minio_client import check_and_create_bucket
 from app.tasks import task_manager
 from app.utils.mongo_init import init_mongodb_indexes
+from app.utils.mongo_init import get_mongo_url
 import asyncio
+
 import os
+from dotenv import load_dotenv
+
+# 加载 .env 文件
+load_dotenv()
+
+# 替换原有的 MONGO_CONFIG 和 MONGO_URL
+MONGO_URL = get_mongo_url()
+MONGO_CONFIG = {
+    'db_name': os.getenv('MONGO_DB_NAME')
+}
+
+
 
 # Windows 下强制使用 SelectorEventLoop
 if os.name == "nt":

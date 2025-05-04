@@ -1,10 +1,25 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Optional
 from motor.motor_asyncio import AsyncIOMotorClient
-from config import MONGO_URL
+from dotenv import load_dotenv
+import os
 from app.models.metadata import ProductOccurrenceMetadata
 from app.utils.redis import redis_service
 import json
+from app.utils.mongo_init import get_mongo_url
+
+# 加载 .env 文件
+load_dotenv()
+
+# 从环境变量中获取 MongoDB 配置
+MONGO_USERNAME = os.getenv("MONGO_USERNAME")
+MONGO_PASSWORD = os.getenv("MONGO_PASSWORD")
+MONGO_HOST = os.getenv("MONGO_HOST")
+MONGO_PORT = os.getenv("MONGO_PORT")
+MONGO_DB_NAME = os.getenv("MONGO_DB_NAME")
+
+# 构建 MongoDB 连接 URL
+MONGO_URL = get_mongo_url()
 
 router = APIRouter(
     tags=["metadata"]

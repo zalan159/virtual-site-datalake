@@ -8,10 +8,29 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import json
 import redis.exceptions
+from dotenv import load_dotenv
 
 from app.core.minio_client import minio_client
-from config import MONGO_URL, CONVERTER_CONFIG
 from app.utils.redis import RedisService
+from app.utils.mongo_init import get_mongo_url
+
+# 加载 .env 文件
+load_dotenv()
+
+# 动态生成 MONGO_URL
+MONGO_USERNAME = os.getenv("MONGO_USERNAME", "admin")
+MONGO_PASSWORD = os.getenv("MONGO_PASSWORD", "admin123")
+MONGO_HOST = os.getenv("MONGO_HOST", "localhost")
+MONGO_PORT = os.getenv("MONGO_PORT", "27017")
+MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "virtualsite")
+MONGO_URL = get_mongo_url()
+
+# 转换程序配置
+CONVERTER_CONFIG = {
+    "path": os.getenv("CONVERTER_PATH", ""),
+    "program_name": os.getenv("CONVERTER_PROGRAM_NAME", ""),
+    "default_output_format": os.getenv("CONVERTER_DEFAULT_OUTPUT_FORMAT", "GLB"),
+}
 
 # 定义任务状态枚举
 class TaskStatus(str, Enum):

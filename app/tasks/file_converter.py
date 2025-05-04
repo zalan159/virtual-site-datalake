@@ -7,10 +7,14 @@ from typing import Optional, Tuple, List
 import subprocess
 import xml.etree.ElementTree as ET
 from motor.motor_asyncio import AsyncIOMotorClient
+from dotenv import load_dotenv
 
 from app.core.minio_client import minio_client, SOURCE_BUCKET_NAME, CONVERTED_BUCKET_NAME
-from config import CONVERTER_CONFIG, MONGO_URL
 from app.models.metadata import ProductOccurrenceMetadata
+from app.utils.mongo_init import get_mongo_url
+
+# 加载 .env 文件
+load_dotenv()
 
 class FileConverter:
     """文件转换器，负责处理文件转换任务"""
@@ -19,8 +23,18 @@ class FileConverter:
     async def _parse_and_store_metadata(xml_file_path: str, file_id: str):
         """解析XML文件并存储元数据到MongoDB"""
         try:
+            # 从环境变量中获取 MongoDB 配置
+            mongo_username = os.getenv("MONGO_USERNAME")
+            mongo_password = os.getenv("MONGO_PASSWORD")
+            mongo_host = os.getenv("MONGO_HOST")
+            mongo_port = os.getenv("MONGO_PORT")
+            mongo_db_name = os.getenv("MONGO_DB_NAME")
+            
+            # 构建 MongoDB 连接 URL
+            mongo_url = get_mongo_url()
+            
             # 连接MongoDB
-            db = AsyncIOMotorClient(MONGO_URL).get_database()
+            db = AsyncIOMotorClient(mongo_url).get_database()
             
             # 解析XML文件
             tree = ET.parse(xml_file_path)
@@ -110,6 +124,10 @@ class FileConverter:
             Tuple[bool, Optional[str], Optional[str]]: (是否成功, 错误信息, 输出文件路径)
         """
         try:
+            # 从环境变量中获取转换程序配置
+            converter_path = os.getenv("CONVERTER_PATH")
+            program_name = os.getenv("CONVERTER_PROGRAM_NAME")
+            
             # 使用自动删除的临时目录
             with tempfile.TemporaryDirectory(prefix="file_conversion_") as temp_dir:
                 print(f"DEBUG - 临时目录创建于: {temp_dir}")
@@ -128,10 +146,6 @@ class FileConverter:
                 # 设置输出文件路径
                 output_filename = f"{os.path.splitext(input_filename)[0]}.{task.output_format.lower()}"
                 output_file_path = os.path.join(temp_dir, output_filename)
-                
-                # 构建转换命令
-                converter_path = CONVERTER_CONFIG.get("path")
-                program_name = CONVERTER_CONFIG.get("program_name")
                 
                 # 使用完整路径执行程序
                 program_path = os.path.join(converter_path, f"{program_name}.exe")

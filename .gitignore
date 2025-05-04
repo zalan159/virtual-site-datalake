@@ -29,7 +29,6 @@ coverage.xml
 .ipynb_checkpoints
 
 # 环境变量文件
-.env
 .env.local
 
 # IDE相关
