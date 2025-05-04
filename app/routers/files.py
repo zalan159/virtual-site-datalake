@@ -36,7 +36,8 @@ CONVERTER_CONFIG = {
 }
 
 # 解析文件格式限制
-FILE_FORMATS = json.loads(os.getenv("FILE_FORMATS"))
+with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'file_formats.json'), 'r', encoding='utf-8') as f:
+    FILE_FORMATS = json.load(f)
 
 router = APIRouter()
 
@@ -51,6 +52,19 @@ def get_all_supported_extensions():
     for format_info in FILE_FORMATS:
         supported_extensions.extend(format_info["extensions"])
     return supported_extensions
+
+@router.get("/supported-formats", response_model=List[dict])
+async def get_supported_formats():
+    """
+    获取所有支持的文件格式及其扩展名
+    
+    返回格式示例：
+    [
+        {"format": "GLTF", "extensions": ["GLTF", "GLB"]},
+        {"format": "OBJ", "extensions": ["OBJ"]}
+    ]
+    """
+    return FILE_FORMATS 
 
 @router.post("/upload", response_model=FileMetadata)
 async def upload_file(
@@ -496,15 +510,3 @@ async def get_conversion_status(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/supported-formats", response_model=List[dict])
-async def get_supported_formats():
-    """
-    获取所有支持的文件格式及其扩展名
-    
-    返回格式示例：
-    [
-        {"format": "GLTF", "extensions": ["GLTF", "GLB"]},
-        {"format": "OBJ", "extensions": ["OBJ"]}
-    ]
-    """
-    return FILE_FORMATS 

@@ -9,7 +9,7 @@ import traceback
 import sys
 
 
-from app.routers import auth, files, tasks, sketchfab, attachments, metadata
+from app.routers import auth, files, tasks, attachments, metadata
 from app.models.user import UserRole
 from app.auth.utils import get_password_hash
 from app.core.minio_client import check_and_create_bucket
@@ -56,7 +56,6 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/auth", tags=["认证"])
 app.include_router(files.router, prefix="/files", tags=["文件操作"])
 app.include_router(tasks.router, prefix="/tasks", tags=["任务管理"])
-app.include_router(sketchfab.router, prefix="/sketchfab", tags=["sketchfab"])
 app.include_router(attachments.router, prefix="/attachments", tags=["附件管理"])
 app.include_router(metadata.router, prefix="/metadata", tags=["元数据管理"])
 

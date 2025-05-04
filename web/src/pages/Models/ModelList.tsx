@@ -1,33 +1,15 @@
-import { Table, Button, Space, Tag, Typography, Card, Modal, Popconfirm, Form, Input, Select, Progress, App } from 'antd';
+import { Table, Button, Space, Tag, Card, Modal, Popconfirm, Form, Input, Select, Progress, App } from 'antd';
 import { PlusOutlined, DownloadOutlined, DeleteOutlined, EditOutlined, SwapOutlined, CheckCircleOutlined, LoadingOutlined, EyeOutlined } from '@ant-design/icons';
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
 import modelAPI from '../../services/modelApi';
 import { UploadOutlined } from '@ant-design/icons';
 import { Upload } from 'antd';
 import type { UploadFile } from 'antd/es/upload/interface';
 
-const { Title } = Typography;
-const { confirm } = Modal;
+
 const { Option } = Select;
 
-// 支持的文件格式列表
-const SUPPORTED_FORMATS = [
-  '3MF', 'SAT', 'SAB', 'DWG', 'DXF', '3DS', 'DWF', 'DWFX', 'IPT', 'IAM', 'NWD', 
-  'MODEL', 'SESSION', 'DLV', 'EXP', 'CATDrawing', 'CATPart', 'CATProduct', 'CATShape', 
-  'CGR', '3DXML', 'DAE', 'ASM', 'NEU', 'PRT', 'XAS', 'XPR', 'DGN', 'FBX', 'GLTF', 
-  'GLB', 'MF1', 'ARC', 'UNV', 'PKG', 'IFC', 'IFCZIP', 'IGS', 'IGES', 'JT', 'X_B', 
-  'X_T', 'XMT', 'XMT_TXT', 'PDF', 'PRC', 'RVT', 'RFA', '3DM', 'STL', 'U3D', 'VDA', 
-  'WRL', 'VRML', 'OBJ'
-];
 
-// 转换状态映射
-const CONVERSION_STATUS = {
-  'pending': '等待中',
-  'processing': '处理中',
-  'completed': '已完成',
-  'failed': '失败',
-};
 
 // 定义模型类型
 interface Model {
@@ -55,6 +37,8 @@ const ModelList: React.FC = () => {
   const [uploadModalVisible, setUploadModalVisible] = useState(false);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [supportedFormats, setSupportedFormats] = useState<string[]>([]);
+  const supportedFormatsRef = useRef<string[]>([]);
   
   // 编辑模态框状态
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -78,7 +62,6 @@ const ModelList: React.FC = () => {
   }}>({});
   const [statusPollingInterval, setStatusPollingInterval] = useState<number | null>(null);
 
-  const navigate = useNavigate();
 
   // 获取模型列表
   const fetchModels = async () => {
@@ -94,7 +77,21 @@ const ModelList: React.FC = () => {
     }
   };
 
+  // 获取支持的文件格式
+  const fetchSupportedFormats = async () => {
+    try {
+      const response = await modelAPI.getSupportedFormats();
+      // response.data 是 [{format, extensions: []}, ...]
+      const allExts = response.data.flatMap((item: any) => item.extensions.map((ext: string) => ext.toUpperCase()));
+      setSupportedFormats(allExts);
+      supportedFormatsRef.current = allExts;
+    } catch (error) {
+      message.error('获取支持的文件格式失败');
+    }
+  };
+
   useEffect(() => {
+    fetchSupportedFormats();
     fetchModels();
   }, []);
 
@@ -121,15 +118,6 @@ const ModelList: React.FC = () => {
     }
   };
 
-  // 验证文件类型
-  const beforeUpload = (file: File) => {
-    const extension = file.name.split('.').pop()?.toUpperCase();
-    if (!extension || !SUPPORTED_FORMATS.includes(extension)) {
-      message.error(`不支持的文件格式: ${extension}。请上传支持的文件格式。`);
-      return false;
-    }
-    return false; // 返回false阻止自动上传
-  };
 
   // 处理删除模型
   const handleDelete = async (id: string) => {
@@ -144,7 +132,7 @@ const ModelList: React.FC = () => {
   };
 
   // 处理下载模型
-  const handleDownload = async (fileId: string, filename: string) => {
+  const handleDownload = async (fileId: string) => {
     try {
       const response = await modelAPI.getModelDownloadUrl(fileId);
       // 使用后端返回的download_url直接下载文件
@@ -160,7 +148,7 @@ const ModelList: React.FC = () => {
   };
   
   // 处理下载转换后的模型
-  const handleDownloadConverted = async (fileId: string, filename: string) => {
+  const handleDownloadConverted = async (fileId: string) => {
     try {
       const response = await modelAPI.getConvertedModelDownloadUrl(fileId);
       // 使用后端返回的download_url直接下载文件
@@ -423,7 +411,7 @@ const ModelList: React.FC = () => {
                   <Button 
                     type="link" 
                     size="small" 
-                    onClick={() => handleDownloadConverted(modelId, record.filename)}
+                    onClick={() => handleDownloadConverted(modelId)}
                   >
                     下载转换后文件
                   </Button>
@@ -452,7 +440,7 @@ const ModelList: React.FC = () => {
       key: 'action',
       render: (_: any, record: Model) => (
         <Space size="middle">
-          <Button type="link" icon={<DownloadOutlined />} onClick={() => handleDownload(record._id, record.filename)}>
+          <Button type="link" icon={<DownloadOutlined />} onClick={() => handleDownload(record._id)}>
             下载
           </Button>
           <Button type="link" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
@@ -508,7 +496,7 @@ const ModelList: React.FC = () => {
         confirmLoading={uploading}
       >
         <Upload
-          accept={SUPPORTED_FORMATS.map(format => `.${format.toLowerCase()}`).join(',')}
+          accept={supportedFormats.map(format => `.${format.toLowerCase()}`).join(',')}
           fileList={fileList}
           onChange={({ fileList }) => setFileList(fileList)}
           maxCount={1}
@@ -516,7 +504,7 @@ const ModelList: React.FC = () => {
           <Button icon={<UploadOutlined />}>选择模型文件</Button>
         </Upload>
         <div style={{ marginTop: 16 }}>
-          <p>支持的文件格式: {SUPPORTED_FORMATS.join(', ')}</p>
+          <p>支持的文件格式: {supportedFormats.join(', ')}</p>
         </div>
       </Modal>
 
