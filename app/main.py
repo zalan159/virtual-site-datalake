@@ -10,6 +10,7 @@ import sys
 
 
 from app.routers import auth, files, tasks, attachments, metadata
+from app.routers import iot  # 新增
 from app.models.user import UserRole
 from app.auth.utils import get_password_hash
 from app.core.minio_client import check_and_create_bucket
@@ -58,6 +59,7 @@ app.include_router(files.router, prefix="/files", tags=["文件操作"])
 app.include_router(tasks.router, prefix="/tasks", tags=["任务管理"])
 app.include_router(attachments.router, prefix="/attachments", tags=["附件管理"])
 app.include_router(metadata.router, prefix="/metadata", tags=["元数据管理"])
+app.include_router(iot.router, prefix="/iot", tags=["iot"])  # 新增
 
 # MongoDB连接
 client = AsyncIOMotorClient(MONGO_URL)

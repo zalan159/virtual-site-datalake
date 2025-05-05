@@ -8,6 +8,7 @@ import ModelPreviewStandalone from '../pages/Models/ModelPreviewStandalone';
 import MetadataManagement from '../pages/Data/MetadataManagement';
 import AttachmentManagement from '../pages/Data/AttachmentManagement';
 import IoTData from '../pages/Data/IoTData';
+import UserSubscriptions from '../pages/Data/Subscriptions';
 import VideoData from '../pages/Data/VideoData';
 import GISData from '../pages/Data/GISData';
 import ERPData from '../pages/Data/ERPData';
@@ -118,6 +119,10 @@ const router = createBrowserRouter([
           {
             path: 'iot',
             element: <IoTData />,
+          },
+          {
+            path: 'mqtt-subscriptions',
+            element: <UserSubscriptions />,
           },
           {
             path: 'video',
