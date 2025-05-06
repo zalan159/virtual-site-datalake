@@ -9,10 +9,10 @@ cd "$PROJECT_ROOT"
 source .venv/bin/activate
 
 # 启动服务
-nohup python -m app.main > main.log 2>&1 &
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
 echo "Main service started (PID: $!)"
 
-nohup python -m app.iot.mqtt_gateway > mqtt_gateway.log 2>&1 &
+python -m app.iot.mqtt_gateway  &
 echo "MQTT Gateway started (PID: $!)"
 
 # 等待并捕获Ctrl+C

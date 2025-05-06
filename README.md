@@ -1,35 +1,70 @@
-# 3D模型文件存储系统
+# 灵境孪生中台
 
-这是一个使用FastAPI、MinIO和MongoDB构建的3D模型文件存储系统。系统支持上传、存储和检索各种3D模型文件及其元数据，并包含完整的用户认证系统。
+“灵境孪生中台”是面向数字孪生场景的数据服务平台，致力于为数字孪生管理和应用提供统一、标准化、多源异构数据的整合与服务能力。平台支持多种工业数据类型的接入、转换、存储、管理与分发，助力数字孪生场景的快速构建与高效运维。
 
-## 功能特点
+## 项目目标
 
-- 使用MinIO存储3D模型文件
-- 使用MongoDB存储文件元数据
-- 支持多种3D文件格式的上传和下载
-- 支持元数据查询
-- 使用Docker容器化部署
-- 完整的用户认证系统
-  - 用户注册和登录
-  - JWT token认证
-  - 基于OAuth2的密码模式
-  - 用户权限控制
-- 文件管理功能
-  - 文件上传和下载
-  - 文件元数据管理
-  - 文件分享
-  - 文件权限控制
+为数字孪生场景和客户端提供统一的数据服务，整合3D模型、IoT、视频流、GIS、附件等多源异构数据，实现数据标准化、统一管理和灵活绑定，支撑数字孪生场景的构建、可视化和智能化。
 
-## 系统要求
+## 支持的数据类型
 
-- Docker
-- Docker Compose
+1. **3D工业模型数据**
+   - 支持多种3D工业模型格式，统一转换为GLB或FBX格式存储。
+   - 元数据（如模型描述、结构、标签等）单独抽离存储于MongoDB。
+   - 转换后的模型作为数字孪生场景的基础素材，可实例化为模型实例。
+
+2. **模型实例与场景**
+   - 支持对基础模型进行实例化，形成模型实例。
+   - 模型实例作为数字孪生数据的载体，组成场景结构。
+
+3. **IoT数据**
+   - 支持用户自定义输入MQTT数据源，通过连接池管理。
+   - 平台自动订阅、实时缓存于Redis，并持久化至MongoDB。
+   - 用户可查阅历史与实时MQTT数据，并可将订阅对象绑定到模型实例。
+
+4. **附件数据**
+   - 使用MinIO进行对象存储，支持各类附件上传。
+   - 可将MinIO对象链接绑定到模型实例。
+
+5. **视频流数据**
+   - 支持多种实时视频流（如HLS、RTSP、海康SDK等）。
+   - 视频流信息存储于MongoDB，通过平台统一转为标准接口（可扩展）。
+   - 支持流送服务（不做视频存储），可绑定到模型实例。
+
+6. **GIS数据**
+   - 支持3DTiles数据上传，并可转换为TMS、WMS、WTMS等服务。
+   - GIS数据可绑定到数字孪生场景。
+
+7. **数据可视化**
+   - 集成GoView数据可视化编辑工具，支持拖拽生成可视化报表。
+   - 可视化报表可绑定并叠加到场景中。
+
+## 平台特性
+
+- 多源异构数据标准化与统一管理
+- 灵活的数据绑定与场景构建能力
+- 支持多种3D模型格式自动转换与存储
+- IoT数据实时采集、缓存与历史查询
+- 附件、视频流、GIS等多类型数据统一接入
+- 可视化报表编辑与场景叠加
+- Web端管理页面与API服务
+- Docker化部署，支持多种数据库组合
+- 默认数据环境：MongoDB、Redis、MinIO
+
+## 系统架构
+
+平台采用微服务与容器化架构，核心服务包括：
+- 数据接入与转换服务
+- 统一数据存储与管理服务
+- 实时数据流与缓存服务
+- Web管理与API服务
+- 可视化编辑与展示服务
 
 ## 环境配置
 
 ### 开发环境
 
-开发环境只启动MongoDB和MinIO服务，方便本地开发和调试：
+开发环境只启动MongoDB、Redis和MinIO服务，方便本地开发和调试：
 
 1. 启动开发环境服务：
 ```bash
@@ -52,69 +87,25 @@ docker-compose -f docker-compose.prod.yml up -d
 
 ## 服务访问
 
-- FastAPI应用: http://localhost:8000
+- Web管理端: http://localhost:8000
 - MinIO控制台: http://localhost:9001
 - MongoDB: localhost:27017
-
-## API端点
-
-### 认证相关
-- POST /auth/register - 用户注册
-- POST /auth/token - 用户登录获取token
-- GET /auth/users/me - 获取当前用户信息
-
-### 文件操作
-- POST /files/upload - 上传3D模型文件和元数据（需要认证）
-- GET /files/list - 获取当前用户的所有文件列表（需要认证）
-- GET /files/{file_path} - 获取特定文件的详情和下载链接（需要认证）
-- DELETE /files/{file_id} - 删除文件（需要认证）
-- PUT /files/{file_id} - 更新文件信息（需要认证）
-- POST /files/{file_id}/share - 分享文件（需要认证）
-- GET /files/shared/list - 获取分享给当前用户的文件列表（需要认证）
+- Redis: localhost:6379
 
 ## 配置文件
 
 系统使用YAML格式的配置文件（config.yaml）来管理所有配置项，包括：
 
 - MongoDB配置
+- Redis配置
 - MinIO配置
-- 阿里云短信配置
 - JWT配置
-- 支持的文件格式配置
-
-### 支持的文件格式
-
-系统支持多种3D模型文件格式，包括但不限于：
-
-- 3MF (3D Manufacturing Format)
-- ACIS (SAT, SAB)
-- AutoCAD (DWG, DXF)
-- Autodesk 3DS
-- CATIA (V4, V5, V6)
-- COLLADA (DAE)
-- FBX
-- GLTF/GLB
-- IFC
-- IGES
-- JT
-- NX
-- Parasolid
-- PDF
-- PRC
-- Revit
-- Rhino3D
-- Solid Edge
-- SolidWorks
-- STEP
-- STL
-- VRML
-- OBJ
-
-每种格式都有详细的版本、扩展名和支持平台信息。
+- 支持的数据类型与格式配置
 
 ## 环境变量
 
 - MONGO_URL: MongoDB连接URL
+- REDIS_URL: Redis连接URL
 - MINIO_ENDPOINT: MinIO服务端点
 - MINIO_ACCESS_KEY: MinIO访问密钥
 - MINIO_SECRET_KEY: MinIO密钥
@@ -135,56 +126,4 @@ docker-compose -f docker-compose.dev.yml up -d
 3. 运行开发服务器：
 ```bash
 uvicorn app.main:app --reload
-```
-
-## API使用示例
-
-### 1. 用户注册
-```bash
-curl -X POST "http://localhost:8000/auth/register" \
-     -H "Content-Type: application/json" \
-     -d '{"email":"user@example.com","username":"testuser","password":"password123"}'
-```
-
-### 2. 用户登录
-```bash
-curl -X POST "http://localhost:8000/auth/token" \
-     -H "Content-Type: application/x-www-form-urlencoded" \
-     -d "username=testuser&password=password123"
-```
-
-### 3. 上传文件（需要认证）
-```bash
-curl -X POST "http://localhost:8000/files/upload" \
-     -H "Authorization: Bearer {your_token}" \
-     -F "file=@model.gltf" \
-     -F "metadata={\"description\":\"测试模型\"}"
-```
-
-### 4. 获取文件列表（需要认证）
-```bash
-curl -X GET "http://localhost:8000/files/list" \
-     -H "Authorization: Bearer {your_token}"
-```
-
-### 5. 更新文件信息（需要认证）
-```bash
-curl -X PUT "http://localhost:8000/files/{file_id}" \
-     -H "Authorization: Bearer {your_token}" \
-     -H "Content-Type: application/json" \
-     -d '{"description":"新描述","tags":["tag1","tag2"],"is_public":true}'
-```
-
-### 6. 分享文件（需要认证）
-```bash
-curl -X POST "http://localhost:8000/files/{file_id}/share" \
-     -H "Authorization: Bearer {your_token}" \
-     -H "Content-Type: application/json" \
-     -d '{"shared_with":["user_id1","user_id2"],"permissions":["read"]}'
-```
-
-### 7. 查看分享的文件（需要认证）
-```bash
-curl -X GET "http://localhost:8000/files/shared/list" \
-     -H "Authorization: Bearer {your_token}"
 ``` 
