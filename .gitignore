@@ -2,6 +2,7 @@
 venv/
 env/
 ENV/
+.venv/
 
 # Python缓存文件
 __pycache__/
