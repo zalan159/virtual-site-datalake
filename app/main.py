@@ -8,13 +8,34 @@ from fastapi.responses import JSONResponse
 import traceback
 import sys
 
-from config import MONGO_CONFIG, MONGO_URL
-from app.routers import auth, files, tasks, sketchfab, attachments
+
+from app.routers import auth, files, tasks, attachments, metadata
+from app.routers import iot  # 新增
 from app.models.user import UserRole
 from app.auth.utils import get_password_hash
 from app.core.minio_client import check_and_create_bucket
 from app.tasks import task_manager
+from app.utils.mongo_init import init_mongodb_indexes
+from app.utils.mongo_init import get_mongo_url
+import asyncio
 
+import os
+from dotenv import load_dotenv
+
+# 加载 .env 文件
+load_dotenv()
+
+# 替换原有的 MONGO_CONFIG 和 MONGO_URL
+MONGO_URL = get_mongo_url()
+MONGO_CONFIG = {
+    'db_name': os.getenv('MONGO_DB_NAME')
+}
+
+
+
+# Windows 下强制使用 SelectorEventLoop
+if os.name == "nt":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 app = FastAPI(
     title="GLTF文件存储系统",
     description="支持用户认证的GLTF文件存储系统API",
@@ -36,8 +57,9 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/auth", tags=["认证"])
 app.include_router(files.router, prefix="/files", tags=["文件操作"])
 app.include_router(tasks.router, prefix="/tasks", tags=["任务管理"])
-app.include_router(sketchfab.router, prefix="/sketchfab", tags=["sketchfab"])
 app.include_router(attachments.router, prefix="/attachments", tags=["附件管理"])
+app.include_router(metadata.router, prefix="/metadata", tags=["元数据管理"])
+app.include_router(iot.router, prefix="/iot", tags=["iot"])  # 新增
 
 # MongoDB连接
 client = AsyncIOMotorClient(MONGO_URL)
@@ -64,6 +86,8 @@ async def check_and_create_admin():
 async def startup_event():
     await check_and_create_admin()
     check_and_create_bucket()
+    # 初始化MongoDB索引
+    await init_mongodb_indexes()
     # 启动任务管理器
     await task_manager.start()
     print("任务管理器已启动")

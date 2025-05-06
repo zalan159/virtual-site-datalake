@@ -1,150 +1,189 @@
-import { Table, Button, Space, Typography, Card, Form, Input, Modal, Select } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import { useState } from 'react';
+import { Tree, Space, Typography, Card, Select, message, Spin } from 'antd';
+import { useEffect, useState } from 'react';
+import { metadataApi, ProductOccurrenceMetadata } from '../../services/metadataApi';
+import { modelAPI } from '../../services/modelApi';
+import type { DataNode } from 'antd/es/tree';
 
 const { Title } = Typography;
-const { Option } = Select;
+
+interface FileInfo {
+  id: string;
+  name: string;
+}
+
+interface UserDataValue {
+  Title: string;
+  Type: string;
+  Value: string;
+}
 
 const MetadataManagement = () => {
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [form] = Form.useForm();
-  
-  // 模拟数据
-  const [metadata, setMetadata] = useState([
-    {
-      id: '1',
-      key: '材质',
-      value: '金属',
-      type: '字符串',
-      description: '模型材质类型',
-    },
-    {
-      id: '2',
-      key: '尺寸',
-      value: '100x200x300',
-      type: '字符串',
-      description: '模型尺寸',
-    },
-    {
-      id: '3',
-      key: '复杂度',
-      value: '高',
-      type: '枚举',
-      description: '模型复杂度',
-    },
-  ]);
+  const [loading, setLoading] = useState(false);
+  const [files, setFiles] = useState<FileInfo[]>([]);
+  const [selectedFileId, setSelectedFileId] = useState<string>();
+  const [metadata, setMetadata] = useState<ProductOccurrenceMetadata[]>([]);
+  const [treeData, setTreeData] = useState<DataNode[]>([]);
+  const [loadedKeys, setLoadedKeys] = useState<string[]>([]);
 
-  const columns = [
-    {
-      title: '键名',
-      dataIndex: 'key',
-      key: 'key',
-    },
-    {
-      title: '值',
-      dataIndex: 'value',
-      key: 'value',
-    },
-    {
-      title: '类型',
-      dataIndex: 'type',
-      key: 'type',
-    },
-    {
-      title: '描述',
-      dataIndex: 'description',
-      key: 'description',
-    },
-    {
-      title: '操作',
-      key: 'action',
-      render: (_: any, record: any) => (
-        <Space size="middle">
-          <Button type="link" icon={<EditOutlined />}>
-            编辑
-          </Button>
-          <Button type="link" danger icon={<DeleteOutlined />}>
-            删除
-          </Button>
-        </Space>
-      ),
-    },
-  ];
+  // 获取文件列表
+  useEffect(() => {
+    const fetchFiles = async () => {
+      try {
+        const response = await modelAPI.getModels();
+        setFiles(response.data.map((file: any) => ({
+          id: file._id,
+          name: file.filename
+        })));
+      } catch (error) {
+        message.error('获取文件列表失败');
+      }
+    };
+    fetchFiles();
+  }, []);
 
-  const handleAdd = () => {
-    setIsModalVisible(true);
+  // 获取选中文件的元数据
+  const fetchMetadata = async (fileId: string) => {
+    setLoading(true);
+    try {
+      const response = await metadataApi.getMetadataByFileId(fileId);
+      setMetadata(response.data);
+      // 初始化顶层节点
+      const initialTreeData = response.data.map((item, index) => ({
+        key: `metadata-${index}`,
+        title: item.name || `未命名元数据 #${index + 1}`,
+        children: [],
+        isLeaf: false,
+      }));
+      setTreeData(initialTreeData);
+    } catch (error) {
+      message.error('获取元数据失败');
+      setMetadata([]);
+      setTreeData([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleOk = () => {
-    form.validateFields().then(values => {
-      // 这里添加保存逻辑
-      console.log('表单值:', values);
-      setIsModalVisible(false);
-      form.resetFields();
+  // 处理文件选择
+  const handleFileSelect = (value: string) => {
+    setSelectedFileId(value);
+    setLoadedKeys([]); // 重置已加载的节点
+    fetchMetadata(value);
+  };
+
+  // 异步加载节点数据
+  const loadNodeData = async (node: any): Promise<void> => {
+    return new Promise((resolve) => {
+      const { key } = node;
+      const index = parseInt(key.split('-')[1]);
+      const item = metadata[index];
+      
+      if (!item) {
+        resolve();
+        return;
+      }
+
+      const children: DataNode[] = [];
+
+      // 添加基本属性
+      const basicProps = [
+        { key: 'pointer', title: '指针', value: item.pointer },
+        { key: 'product_id', title: '产品ID', value: item.product_id },
+        { key: 'name', title: '名称', value: item.name },
+        { key: 'layer', title: '图层', value: item.layer },
+        { key: 'style', title: '样式', value: item.style },
+        { key: 'behaviour', title: '行为', value: item.behaviour },
+        { key: 'modeller_type', title: '建模类型', value: item.modeller_type },
+        { key: 'product_load_status', title: '产品加载状态', value: item.product_load_status },
+        { key: 'product_flag', title: '产品标记', value: item.product_flag },
+        { key: 'unit', title: '单位', value: item.unit },
+        { key: 'density_volume_unit', title: '体积密度单位', value: item.density_volume_unit },
+        { key: 'density_mass_unit', title: '质量密度单位', value: item.density_mass_unit },
+        { key: 'unit_from_cad', title: 'CAD单位', value: item.unit_from_cad },
+        { key: 'rgb', title: 'RGB颜色', value: item.rgb }
+      ];
+
+      // 添加基本属性到子节点
+      basicProps.forEach(prop => {
+        if (prop.value) {
+          children.push({
+            key: `${key}-${prop.key}`,
+            title: `${prop.title}: ${prop.value}`,
+            isLeaf: true
+          });
+        }
+      });
+
+      // 添加用户数据
+      if (Object.keys(item.user_data).length > 0) {
+        const userDataNode: DataNode = {
+          key: `${key}-user-data`,
+          title: '用户数据',
+          children: Object.entries(item.user_data).map(([title, values]) => ({
+            key: `${key}-user-${title}`,
+            title: title,
+            children: (values as UserDataValue[]).map((value, vIndex) => ({
+              key: `${key}-user-${title}-${vIndex}`,
+              title: `${value.Title}: ${value.Value} (${value.Type})`,
+              isLeaf: true
+            }))
+          }))
+        };
+        children.push(userDataNode);
+      }
+
+      // 更新节点数据
+      setTreeData(prevData => {
+        const updateTreeData = (list: DataNode[], key: string, children: DataNode[]): DataNode[] => {
+          return list.map(node => {
+            if (node.key === key) {
+              return { ...node, children };
+            }
+            if (node.children) {
+              return { ...node, children: updateTreeData(node.children, key, children) };
+            }
+            return node;
+          });
+        };
+        return updateTreeData(prevData, key, children);
+      });
+
+      setLoadedKeys(prevKeys => [...prevKeys, key]);
+      resolve();
     });
-  };
-
-  const handleCancel = () => {
-    setIsModalVisible(false);
-    form.resetFields();
   };
 
   return (
     <div>
       <Card>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-          <Title level={4}>元数据管理</Title>
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            添加元数据
-          </Button>
-        </div>
-        <Table columns={columns} dataSource={metadata} rowKey="id" />
+        <Space direction="vertical" style={{ width: '100%' }} size="large">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Title level={4}>元数据管理</Title>
+            <Select
+              style={{ width: 300 }}
+              placeholder="请选择文件"
+              onChange={handleFileSelect}
+              value={selectedFileId}
+              options={files.map(file => ({
+                value: file.id,
+                label: file.name
+              }))}
+            />
+          </div>
+          
+          <Spin spinning={loading}>
+            <Tree
+              loadData={loadNodeData}
+              treeData={treeData}
+              loadedKeys={loadedKeys}
+              showLine
+              showIcon={false}
+              height={400}
+              itemHeight={28}
+            />
+          </Spin>
+        </Space>
       </Card>
-
-      <Modal
-        title="添加元数据"
-        open={isModalVisible}
-        onOk={handleOk}
-        onCancel={handleCancel}
-      >
-        <Form
-          form={form}
-          layout="vertical"
-        >
-          <Form.Item
-            name="key"
-            label="键名"
-            rules={[{ required: true, message: '请输入键名' }]}
-          >
-            <Input placeholder="请输入键名" />
-          </Form.Item>
-          <Form.Item
-            name="value"
-            label="值"
-            rules={[{ required: true, message: '请输入值' }]}
-          >
-            <Input placeholder="请输入值" />
-          </Form.Item>
-          <Form.Item
-            name="type"
-            label="类型"
-            rules={[{ required: true, message: '请选择类型' }]}
-          >
-            <Select placeholder="请选择类型">
-              <Option value="字符串">字符串</Option>
-              <Option value="数字">数字</Option>
-              <Option value="布尔值">布尔值</Option>
-              <Option value="枚举">枚举</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item
-            name="description"
-            label="描述"
-          >
-            <Input.TextArea placeholder="请输入描述" />
-          </Form.Item>
-        </Form>
-      </Modal>
     </div>
   );
 };

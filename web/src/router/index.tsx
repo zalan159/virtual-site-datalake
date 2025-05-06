@@ -8,6 +8,7 @@ import ModelPreviewStandalone from '../pages/Models/ModelPreviewStandalone';
 import MetadataManagement from '../pages/Data/MetadataManagement';
 import AttachmentManagement from '../pages/Data/AttachmentManagement';
 import IoTData from '../pages/Data/IoTData';
+import UserSubscriptions from '../pages/Data/Subscriptions';
 import VideoData from '../pages/Data/VideoData';
 import GISData from '../pages/Data/GISData';
 import ERPData from '../pages/Data/ERPData';
@@ -17,7 +18,7 @@ import SceneEditor from '../pages/Scenes/SceneEditor';
 import MaterialList from '../pages/Models/MaterialList';
 import DataTemplate from '../pages/Data/DataTemplate';
 import AgentPage from '../pages/Agent';
-import Store from '../pages/Models/Store';
+// import Store from '../pages/Models/Store';
 import ModelInstances from '../pages/Data/ModelInstances';
 
 // 路由守卫组件
@@ -68,10 +69,10 @@ const router = createBrowserRouter([
             path: 'materials',
             element: <MaterialList />,
           },
-          {
-            path: 'store',
-            element: <Store />,
-          },
+          // {
+          //   path: 'store',
+          //   element: <Store />,
+          // },
           {
             path: 'tasks',
             children: [
@@ -118,6 +119,10 @@ const router = createBrowserRouter([
           {
             path: 'iot',
             element: <IoTData />,
+          },
+          {
+            path: 'mqtt-subscriptions',
+            element: <UserSubscriptions />,
           },
           {
             path: 'video',

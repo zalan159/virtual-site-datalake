@@ -8,15 +8,19 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "generate-api": "orval" 
+    "generate-api": "orval"
   },
   "dependencies": {
     "@ant-design/icons": "^6.0.0",
     "@ant-design/pro-components": "^2.8.7",
+    "@babylonjs/core": "^8.5.0",
+    "@babylonjs/loaders": "^8.5.0",
     "@orillusion/core": "^0.8.5-dev.6",
     "@types/react-router-dom": "^5.3.3",
     "antd": "^5.24.8",
     "axios": "^1.9.0",
+    "babylonwander": "^1.5.0",
+    "dayjs": "^1.11.13",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^7.5.2"

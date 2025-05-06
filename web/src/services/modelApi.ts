@@ -96,6 +96,11 @@ export const modelAPI = {
         throw error;
       });
   },
+  
+  // 获取支持的文件格式
+  getSupportedFormats: () => {
+    return api.get('/files/supported-formats');
+  },
 };
 
 export default modelAPI; 

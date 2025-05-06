@@ -1,11 +1,15 @@
 from minio import Minio
-from config import MINIO_CONFIG
+from dotenv import load_dotenv
+import os
+
+# 加载.env文件
+load_dotenv()
 
 # MinIO客户端
 minio_client = Minio(
-    f"{MINIO_CONFIG['host']}:{MINIO_CONFIG['port']}",
-    access_key=MINIO_CONFIG['username'],
-    secret_key=MINIO_CONFIG['password'],
+    f"{os.getenv('MINIO_HOST')}:{os.getenv('MINIO_PORT')}",
+    access_key=os.getenv('MINIO_USERNAME'),
+    secret_key=os.getenv('MINIO_PASSWORD'),
     secure=False
 )
 

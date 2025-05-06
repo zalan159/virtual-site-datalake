@@ -1,16 +1,20 @@
 import redis
-from config import REDIS_CONFIG
+from dotenv import load_dotenv
+import os
+
+# 加载 .env 文件
+load_dotenv()
 
 class RedisService:
     def __init__(self):
         self.redis_client = redis.Redis(
-            host=REDIS_CONFIG['host'],
-            port=REDIS_CONFIG['port'],
-            db=REDIS_CONFIG['db'],
-            password=REDIS_CONFIG['password'],
+            host=os.getenv('REDIS_HOST'),
+            port=int(os.getenv('REDIS_PORT')),
+            db=int(os.getenv('REDIS_DB')),
+            password=os.getenv('REDIS_PASSWORD'),
             decode_responses=True
         )
-        self.verification_code_expire = REDIS_CONFIG['verification_code_expire']
+        self.verification_code_expire = int(os.getenv('REDIS_VERIFICATION_CODE_EXPIRE'))
 
     def store_verification_code(self, phone: str, code: str) -> None:
         """存储验证码"""

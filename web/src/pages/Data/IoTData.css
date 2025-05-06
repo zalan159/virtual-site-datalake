@@ -1,0 +1,35 @@
+.realtime-messages {
+  border: 1px solid #f0f0f0;
+  border-radius: 4px;
+}
+
+.message-item {
+  padding: 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.message-item:last-child {
+  border-bottom: none;
+}
+
+.message-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.topic {
+  font-weight: 500;
+  color: #1890ff;
+}
+
+.message-content {
+  margin: 0;
+  font-size: 12px;
+  background: #fafafa;
+  padding: 8px;
+  border-radius: 2px;
+  max-height: 200px;
+  overflow: auto;
+} 

@@ -1,14 +1,18 @@
 import random
+import os
+from dotenv import load_dotenv
 from alibabacloud_dysmsapi20170525.client import Client
 from alibabacloud_tea_openapi import models as open_api_models
 from alibabacloud_dysmsapi20170525 import models as dysmsapi_models
-from config import ALIYUN_SMS_CONFIG
+
+# 加载环境变量
+load_dotenv()
 
 class SMSService:
     def __init__(self):
         config = open_api_models.Config()
-        config.access_key_id = ALIYUN_SMS_CONFIG['access_key_id']
-        config.access_key_secret = ALIYUN_SMS_CONFIG['access_key_secret']
+        config.access_key_id = os.getenv('ALIYUN_SMS_ACCESS_KEY_ID')
+        config.access_key_secret = os.getenv('ALIYUN_SMS_ACCESS_KEY_SECRET')
         self.client = Client(config)
 
     def generate_code(self) -> str:
@@ -27,9 +31,9 @@ class SMSService:
             # 构建请求
             send_sms_request = dysmsapi_models.SendSmsRequest(
                 phone_numbers=phone_number,
-                sign_name=ALIYUN_SMS_CONFIG['sign_name'],
-                template_code=ALIYUN_SMS_CONFIG['template_code'],
-                template_param=ALIYUN_SMS_CONFIG['template_param'] % code
+                sign_name=os.getenv('ALIYUN_SMS_SIGN_NAME'),
+                template_code=os.getenv('ALIYUN_SMS_TEMPLATE_CODE'),
+                template_param=os.getenv('ALIYUN_SMS_TEMPLATE_PARAM') % code
             )
             
             # 发送短信

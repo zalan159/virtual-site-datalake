@@ -14,6 +14,7 @@ import {
   PictureOutlined,
   RobotOutlined,
   ShoppingOutlined,
+  ApiOutlined,
 } from '@ant-design/icons';
 import type { ProSettings } from '@ant-design/pro-components';
 import { PageContainer, ProCard, ProLayout } from '@ant-design/pro-components';
@@ -135,6 +136,11 @@ const MainLayout = () => {
             path: '/data/iot',
             name: 'IoT数据',
             icon: <AppstoreOutlined />,
+          },
+          {
+            path: '/data/mqtt-subscriptions',
+            name: 'MQTT订阅',
+            icon: <ApiOutlined />,
           },
           {
             path: '/data/video',

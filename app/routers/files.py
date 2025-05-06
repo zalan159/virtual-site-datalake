@@ -10,17 +10,61 @@ import subprocess
 import asyncio
 import tempfile
 import shlex
+from dotenv import load_dotenv
 
 from app.models.user import UserInDB, FileMetadata, FileShare, ConversionStatus, FileConversion
 from app.auth.utils import get_current_active_user, db
-from config import MONGO_CONFIG, MONGO_URL, MINIO_CONFIG, get_all_supported_extensions, CONVERTER_CONFIG
 from app.core.minio_client import minio_client, SOURCE_BUCKET_NAME, CONVERTED_BUCKET_NAME
 from app.tasks.task_manager import TaskManager, TaskType
+from app.utils.mongo_init import get_mongo_url
+
+# 加载 .env 文件
+load_dotenv()
+
+# 替换 config 导入为环境变量
+MONGO_URL = get_mongo_url()
+MINIO_CONFIG = {
+    "username": os.getenv("MINIO_USERNAME"),
+    "password": os.getenv("MINIO_PASSWORD"),
+    "host": os.getenv("MINIO_HOST"),
+    "port": os.getenv("MINIO_PORT"),
+}
+CONVERTER_CONFIG = {
+    "path": os.getenv("CONVERTER_PATH"),
+    "program_name": os.getenv("CONVERTER_PROGRAM_NAME"),
+    "default_output_format": os.getenv("CONVERTER_DEFAULT_OUTPUT_FORMAT"),
+}
+
+# 解析文件格式限制
+with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'file_formats.json'), 'r', encoding='utf-8') as f:
+    FILE_FORMATS = json.load(f)
 
 router = APIRouter()
 
 # 确保bucket存在
 BUCKET_NAME = SOURCE_BUCKET_NAME
+
+def get_all_supported_extensions():
+    """
+    从 FILE_FORMATS 中提取所有支持的扩展名
+    """
+    supported_extensions = []
+    for format_info in FILE_FORMATS:
+        supported_extensions.extend(format_info["extensions"])
+    return supported_extensions
+
+@router.get("/supported-formats", response_model=List[dict])
+async def get_supported_formats():
+    """
+    获取所有支持的文件格式及其扩展名
+    
+    返回格式示例：
+    [
+        {"format": "GLTF", "extensions": ["GLTF", "GLB"]},
+        {"format": "OBJ", "extensions": ["OBJ"]}
+    ]
+    """
+    return FILE_FORMATS 
 
 @router.post("/upload", response_model=FileMetadata)
 async def upload_file(
@@ -464,4 +508,5 @@ async def get_conversion_status(
             "result": task.result
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) 
+        raise HTTPException(status_code=500, detail=str(e))
+

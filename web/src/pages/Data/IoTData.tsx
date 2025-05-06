@@ -1,240 +1,184 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Button, Space, Modal, Form, Input, message, Tag, Tooltip } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { Card, Table, Button, Space, Modal, Form, Input, message, Tag, Tooltip, Row, Col, InputNumber, Alert } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, ExclamationCircleOutlined, HistoryOutlined, ClockCircleOutlined, ProfileOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import { brokerAPI, BrokerConfig, TopicSubscription, MessageRecord, messageAPI, subscriptionAPI, UserTopicSubscription } from '../../services/iotService';
+import dayjs from 'dayjs';
+import { Link } from 'react-router-dom';
+import './IoTData.css'; // 将样式移到外部CSS文件
 
-interface IoTDataItem {
-  id: string;
-  deviceId: string;
-  deviceName: string;
-  dataType: string;
-  value: string;
-  timestamp: string;
-  status: 'active' | 'inactive' | 'error';
-}
-
-const IoTData: React.FC = () => {
-  const [data, setData] = useState<IoTDataItem[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [modalVisible, setModalVisible] = useState<boolean>(false);
+const BrokerManagement: React.FC = () => {
+  const [data, setData] = useState<BrokerConfig[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
   const [form] = Form.useForm();
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [currentId, setCurrentId] = useState<string | null>(null);
+  const [userSubscriptions, setUserSubscriptions] = useState<UserTopicSubscription[]>([]);
 
-  // 模拟数据
   useEffect(() => {
-    const mockData: IoTDataItem[] = [
-      {
-        id: '1',
-        deviceId: 'DEV001',
-        deviceName: '温度传感器',
-        dataType: 'temperature',
-        value: '25.6°C',
-        timestamp: '2023-04-27 10:30:45',
-        status: 'active',
-      },
-      {
-        id: '2',
-        deviceId: 'DEV002',
-        deviceName: '湿度传感器',
-        dataType: 'humidity',
-        value: '65%',
-        timestamp: '2023-04-27 10:30:42',
-        status: 'active',
-      },
-      {
-        id: '3',
-        deviceId: 'DEV003',
-        deviceName: '压力传感器',
-        dataType: 'pressure',
-        value: '1013.25 hPa',
-        timestamp: '2023-04-27 10:30:40',
-        status: 'inactive',
-      },
-      {
-        id: '4',
-        deviceId: 'DEV004',
-        deviceName: '光照传感器',
-        dataType: 'light',
-        value: '850 lux',
-        timestamp: '2023-04-27 10:30:38',
-        status: 'error',
-      },
-    ];
-    setData(mockData);
+    loadData();
   }, []);
 
-  const handleAdd = () => {
-    setEditingId(null);
-    form.resetFields();
-    setModalVisible(true);
-  };
-
-  const handleEdit = (record: IoTDataItem) => {
-    setEditingId(record.id);
-    form.setFieldsValue(record);
-    setModalVisible(true);
-  };
-
-  const handleDelete = (id: string) => {
-    Modal.confirm({
-      title: '确认删除',
-      icon: <ExclamationCircleOutlined />,
-      content: '确定要删除这条IoT数据记录吗？',
-      okText: '确认',
-      cancelText: '取消',
-      onOk: () => {
-        setData(data.filter(item => item.id !== id));
-        message.success('删除成功');
-      },
-    });
-  };
-
-  const handleModalOk = () => {
-    form.validateFields().then(values => {
-      if (editingId) {
-        // 编辑现有数据
-        setData(data.map(item => 
-          item.id === editingId ? { ...item, ...values } : item
-        ));
-        message.success('更新成功');
-      } else {
-        // 添加新数据
-        const newItem: IoTDataItem = {
-          id: Date.now().toString(),
-          ...values,
-          timestamp: new Date().toLocaleString(),
-          status: 'active',
-        };
-        setData([...data, newItem]);
-        message.success('添加成功');
-      }
-      setModalVisible(false);
-    });
-  };
-
-  const getStatusTag = (status: string) => {
-    switch (status) {
-      case 'active':
-        return <Tag color="green">活跃</Tag>;
-      case 'inactive':
-        return <Tag color="orange">非活跃</Tag>;
-      case 'error':
-        return <Tag color="red">错误</Tag>;
-      default:
-        return <Tag>未知</Tag>;
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const res = await brokerAPI.list();
+      setData(res.data);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const columns: ColumnsType<IoTDataItem> = [
+  const handleSubmit = async () => {
+    const values = await form.validateFields();
+    
+    try {
+      if (currentId) {
+        await brokerAPI.update(currentId, values);
+        message.success('更新成功');
+      } else {
+        await brokerAPI.create(values);
+        message.success('创建成功');
+      }
+      loadData();
+      setModalVisible(false);
+    } catch (err) {
+      message.error('操作失败');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    Modal.confirm({
+      title: '确认删除',
+      icon: <ExclamationCircleOutlined />,
+      content: '确定要删除这个Broker配置吗？',
+      onOk: async () => {
+        await brokerAPI.delete(id);
+        loadData();
+        message.success('删除成功');
+      }
+    });
+  };
+
+  const messageColumns = [
     {
-      title: '设备ID',
-      dataIndex: 'deviceId',
-      key: 'deviceId',
+      title: '时间',
+      dataIndex: 'received_ts',
+      render: (ts: number) => dayjs(ts * 1000).format('YYYY-MM-DD HH:mm:ss')
     },
+    { title: '主题', dataIndex: 'topic' },
     {
-      title: '设备名称',
-      dataIndex: 'deviceName',
-      key: 'deviceName',
-    },
-    {
-      title: '数据类型',
-      dataIndex: 'dataType',
-      key: 'dataType',
-    },
-    {
-      title: '数值',
-      dataIndex: 'value',
-      key: 'value',
-    },
-    {
-      title: '时间戳',
-      dataIndex: 'timestamp',
-      key: 'timestamp',
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status) => getStatusTag(status),
-    },
+      title: '内容',
+      dataIndex: 'payload',
+      render: (payload: any) => (
+        <pre style={{ margin: 0, maxWidth: 400, overflow: 'auto' }}>
+          {JSON.stringify(payload, null, 2)}
+        </pre>
+      )
+    }
+  ];
+
+  const columns: ColumnsType<BrokerConfig> = [
+    { title: '主机地址', dataIndex: 'hostname' },
+    { title: '端口', dataIndex: 'port' },
     {
       title: '操作',
-      key: 'action',
       render: (_, record) => (
-        <Space size="middle">
-          <Tooltip title="编辑">
-            <Button 
-              type="text" 
-              icon={<EditOutlined />} 
-              onClick={() => handleEdit(record)}
-            />
-          </Tooltip>
-          <Tooltip title="删除">
-            <Button 
-              type="text" 
-              danger 
-              icon={<DeleteOutlined />} 
-              onClick={() => handleDelete(record.id)}
-            />
-          </Tooltip>
+        <Space>
+          <Button icon={<EditOutlined />} onClick={() => {
+            setCurrentId(record._id!);
+            form.setFieldsValue({
+              ...record,
+            });
+            setModalVisible(true);
+          }} />
+          <Button danger icon={<DeleteOutlined />} 
+            onClick={() => handleDelete(record._id!)} />
         </Space>
-      ),
-    },
+      )
+    }
   ];
 
   return (
-    <Card title="IoT数据管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>添加数据</Button>}>
-      <Table 
-        columns={columns} 
-        dataSource={data} 
-        rowKey="id" 
-        loading={loading}
-        pagination={{ pageSize: 10 }}
-      />
+    <>
+      <Card
+        title="MQTT Broker管理"
+        extra={
+          <Space>
+            <Link to="/data/mqtt-subscriptions">
+              <Button 
+                icon={<ProfileOutlined />}
+              >
+                管理我的订阅
+              </Button>
+            </Link>
+            <Button type="primary" icon={<PlusOutlined />} 
+              onClick={() => {
+                setCurrentId(null);
+                form.resetFields();
+                setModalVisible(true);
+              }}>
+              新建配置
+            </Button>
+          </Space>
+        }
+      >
+        <Table
+          rowKey="_id"
+          columns={columns}
+          dataSource={data}
+          loading={loading}
+          pagination={{ pageSize: 8 }}
+        />
+      </Card>
 
       <Modal
-        title={editingId ? "编辑IoT数据" : "添加IoT数据"}
+        title={currentId ? '编辑配置' : '新建配置'}
         open={modalVisible}
-        onOk={handleModalOk}
+        onOk={handleSubmit}
         onCancel={() => setModalVisible(false)}
         destroyOnClose
+        width={800}
       >
-        <Form
-          form={form}
-          layout="vertical"
-        >
-          <Form.Item
-            name="deviceId"
-            label="设备ID"
-            rules={[{ required: true, message: '请输入设备ID' }]}
-          >
-            <Input placeholder="请输入设备ID" />
-          </Form.Item>
-          <Form.Item
-            name="deviceName"
-            label="设备名称"
-            rules={[{ required: true, message: '请输入设备名称' }]}
-          >
-            <Input placeholder="请输入设备名称" />
-          </Form.Item>
-          <Form.Item
-            name="dataType"
-            label="数据类型"
-            rules={[{ required: true, message: '请输入数据类型' }]}
-          >
-            <Input placeholder="请输入数据类型" />
-          </Form.Item>
-          <Form.Item
-            name="value"
-            label="数值"
-            rules={[{ required: true, message: '请输入数值' }]}
-          >
-            <Input placeholder="请输入数值" />
-          </Form.Item>
+        <Alert
+          message="提示"
+          description="MQTT网关会根据订阅情况自动管理连接，无需手动启停"
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+        <Form form={form} layout="vertical" initialValues={{ port: 1883 }}>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item label="主机地址" name="hostname" 
+                rules={[{ required: true }]}>
+                <Input placeholder="mqtt.example.com" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="端口" name="port" 
+                rules={[{ required: true }]}>
+                <InputNumber min={1} max={65535} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item label="用户名" name="username">
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="密码" name="password">
+                <Input.Password />
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
       </Modal>
-    </Card>
+    </>
   );
 };
 
-export default IoTData; 
+export default BrokerManagement; 

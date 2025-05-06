@@ -1,16 +1,29 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Spin, message, App } from 'antd';
-import { Engine3D, Scene3D, Object3D, Camera3D, DirectLight, HoverCameraController, Color, View3D, AtmosphericComponent } from '@orillusion/core';
+import { Spin, App } from 'antd';
+import { 
+  Engine, 
+  Scene, 
+  FreeCamera, 
+  Vector3, 
+  HemisphericLight, 
+  MeshBuilder, 
+  StandardMaterial, 
+  Color3,
+  SceneLoader,
+  PointerEventTypes
+} from '@babylonjs/core';
+import '@babylonjs/loaders/glTF';
 import modelAPI from '../../services/modelApi';
 
 const ModelPreviewStandalone = () => {
   const { modelId } = useParams<{ modelId: string }>();
-  const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [modelUrl, setModelUrl] = useState<string | null>(null);
-  const viewRef = useRef<View3D | null>(null);
+  const engineRef = useRef<Engine | null>(null);
+  const sceneRef = useRef<Scene | null>(null);
   const { message: appMessage } = App.useApp();
 
   useEffect(() => {
@@ -37,84 +50,56 @@ const ModelPreviewStandalone = () => {
   }, [modelId]);
 
   useEffect(() => {
-    if (!modelUrl || !containerRef.current) return;
+    if (!modelUrl || !canvasRef.current) return;
 
     const initEngine = async () => {
       try {
         // 初始化引擎
-        await Engine3D.init();
-        
-        // 创建新场景作为根节点
-        const scene3D: Scene3D = new Scene3D();
-        
-        // 添加大气天空环境
-        const sky = scene3D.addComponent(AtmosphericComponent);
-        sky.sunY = 0.6;
-        
+        const canvas = canvasRef.current;
+        const engine = new Engine(canvas, true);
+        engineRef.current = engine;
+
+        // 创建场景
+        const scene = new Scene(engine);
+        sceneRef.current = scene;
+
         // 创建相机
-        const cameraObj: Object3D = new Object3D();
-        const camera = cameraObj.addComponent(Camera3D);
-        
-        // 调整相机视角
-        camera.perspective(60, Engine3D.aspect, 1, 5000.0);
-        
-        // 设置相机控制器
-        const controller = cameraObj.addComponent(HoverCameraController);
-        controller.setCamera(0, -20, 15);
-        
-        // 添加相机节点
-        scene3D.addChild(cameraObj);
-        
+        const camera = new FreeCamera(
+          "camera",
+          new Vector3(0, 5, -10),
+          scene
+        );
+        camera.setTarget(Vector3.Zero());
+        camera.attachControl(canvas, true);
+
         // 创建光源
-        const light: Object3D = new Object3D();
-        
-        // 添加平行光组件
-        const component: DirectLight = light.addComponent(DirectLight);
-        
-        // 调整光照
-        light.rotationX = 45;
-        light.rotationY = 30;
-        component.lightColor = new Color(1.0, 1.0, 1.0, 1.0);
-        component.intensity = 1;
-        
-        // 添加光源对象
-        scene3D.addChild(light);
-        
-        // 加载GLTF模型 https路径正常读取
-        // const model = await Engine3D.res.loadGltf('https://cdn.orillusion.com/PBR/DragonAttenuation/DragonAttenuation.gltf');
-        // 本地路径public下读取提示失败：@orillusion_core.js?v=ac4a54d9:19264 Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'onError')
-            // at @orillusion_core.js?v=ac4a54d9:19264:11
-            // Promise.catch		
-            // initEngine	@	ModelPreviewStandalone.tsx:85
-            // await in initEngine		
-            // (anonymous)	@	ModelPreviewStandalone.tsx:115
-            // <ModelPreviewStandalone>		
-            // (anonymous)	@	index.tsx:98
-            
-        const model = await Engine3D.res.loadGltf(modelUrl);
-        scene3D.addChild(model);
-        
-        // 创建canvas元素
-        const canvas = document.createElement('canvas');
-        canvas.style.width = '100%';
-        canvas.style.height = '100%';
-        
-        // 创建视图，设置目标场景和相机
-        const view = new View3D();
-        view.scene = scene3D;
-        view.camera = camera;
-        // @ts-ignore
-        view.canvas = canvas;
-        viewRef.current = view;
-        
-        // 将canvas添加到容器
-        if (containerRef.current) {
-          containerRef.current.innerHTML = '';
-          containerRef.current.appendChild(canvas);
+        const light = new HemisphericLight(
+          "light",
+          new Vector3(0, 1, 0),
+          scene
+        );
+        light.intensity = 0.7;
+
+        // 加载模型
+        try {
+          await SceneLoader.ImportMeshAsync("", "", modelUrl, scene, undefined, ".glb");
+          // 自动调整相机视角以适应模型
+          scene.createDefaultCameraOrLight(true, true, true);
+        } catch (error) {
+          console.error('加载模型失败:', error);
+          setError('加载模型失败');
         }
-        
-        // 开始渲染
-        Engine3D.startRenderView(view);
+
+        // 开始渲染循环
+        engine.runRenderLoop(() => {
+          scene.render();
+        });
+
+        // 处理窗口大小变化
+        window.addEventListener('resize', () => {
+          engine.resize();
+        });
+
       } catch (error) {
         console.error('初始化引擎失败:', error);
         setError('初始化引擎失败');
@@ -125,12 +110,12 @@ const ModelPreviewStandalone = () => {
 
     // 清理函数
     return () => {
-      if (viewRef.current) {
-        // @ts-ignore
-        Engine3D.stopRenderView(viewRef.current);
+      if (engineRef.current) {
+        engineRef.current.dispose();
       }
-      // @ts-ignore
-      Engine3D.dispose();
+      if (sceneRef.current) {
+        sceneRef.current.dispose();
+      }
     };
   }, [modelUrl]);
 
@@ -145,8 +130,8 @@ const ModelPreviewStandalone = () => {
           {error}
         </div>
       ) : (
-        <div 
-          ref={containerRef} 
+        <canvas 
+          ref={canvasRef} 
           style={{ width: '100%', height: '100%' }}
         />
       )}
