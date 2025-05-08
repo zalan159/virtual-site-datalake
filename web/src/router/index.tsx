@@ -20,6 +20,7 @@ import DataTemplate from '../pages/Data/DataTemplate';
 import AgentPage from '../pages/Agent';
 // import Store from '../pages/Models/Store';
 import ModelInstances from '../pages/Data/ModelInstances';
+import SceneEditorStandalone from '../pages/Scenes/SceneEditorStandalone';
 
 // 路由守卫组件
 const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
@@ -156,6 +157,10 @@ const router = createBrowserRouter([
   {
     path: '/preview/:modelId',
     element: <ModelPreviewStandalone />,
+  },
+  {
+    path: '/scenes/standalone/:sceneId',
+    element: <SceneEditorStandalone />,
   },
 ]);
 

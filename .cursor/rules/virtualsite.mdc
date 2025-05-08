@@ -1,0 +1,6 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+当修改前端代码的时候，你需要检查前端目录web/下的结构，复用已有的模块，遵循相同的目录结构逻辑和代码风格。比如所有的api连接都通过services目录下的模块，并复用同一个axios模块的实例。

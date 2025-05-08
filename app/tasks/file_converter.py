@@ -148,7 +148,10 @@ class FileConverter:
                 output_file_path = os.path.join(temp_dir, output_filename)
                 
                 # 使用完整路径执行程序
-                program_path = os.path.join(converter_path, f"{program_name}.exe")
+                if os.name == 'nt':  # Windows系统
+                    program_path = os.path.join(converter_path, f"{program_name}.exe")
+                else:
+                    program_path = os.path.join(converter_path, program_name)
                 
                 # 输入输出路径直接使用原始路径（后续由双引号包裹）
                 input_file_path_quoted = input_file_path
@@ -160,7 +163,7 @@ class FileConverter:
                 print(f"转换工具存在: {os.path.exists(os.path.join(converter_path, f'{program_name}.exe'))}")
                 
                 # 区分操作系统处理
-                if os.name == 'nt':  # Windows系统
+                if os.name == 'nt':
                     args = [
                         f'"{program_path}"',
                         f'"{input_file_path}"',
@@ -168,14 +171,13 @@ class FileConverter:
                     ]
                     cwd = converter_path
                     shell = True
-                else:  # Linux系统
+                else:
                     if not os.access(program_path, os.X_OK):
                         raise PermissionError(f"转换程序无执行权限: {program_path}")
-                    
                     args = [
                         f"./{program_name}",
-                        shlex.quote(input_file_path),
-                        shlex.quote(output_file_path)
+                        input_file_path,
+                        output_file_path
                     ]
                     cwd = converter_path
                     shell = False
@@ -183,16 +185,31 @@ class FileConverter:
                 print(f"执行参数: {' '.join(args)}")
 
                 def run_subprocess():
-                    return subprocess.run(
-                        ' '.join(args),
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        cwd=cwd,
-                        shell=shell,
-                        universal_newlines=True,
-                        text=True
-                    )
-
+                    if shell:
+                        return subprocess.run(
+                            ' '.join(args),
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            cwd=cwd,
+                            shell=shell,
+                            universal_newlines=True,
+                            text=True
+                        )
+                    else:
+                        return subprocess.run(
+                            args,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            cwd=cwd,
+                            shell=shell,
+                            universal_newlines=True,
+                            text=True
+                        )
+                print(f"converter_path: {converter_path}")
+                print(f"program_name: {program_name}")
+                print(f"program_path: {program_path}")
+                print(f"目录下文件: {os.listdir(converter_path)}")
+                print(f"args: {args}")
                 process = await asyncio.to_thread(run_subprocess)
                 
                 return_code = process.returncode

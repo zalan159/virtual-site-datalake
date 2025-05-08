@@ -174,6 +174,11 @@ const MainLayout = () => {
         name: '用户设置',
         icon: <UserOutlined />,
       },
+      {
+        path: '/scene-editor-standalone',
+        name: '场景编辑器(独立)',
+        icon: <AppstoreOutlined />,
+      },
     ],
   };
 

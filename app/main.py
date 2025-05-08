@@ -9,7 +9,7 @@ import traceback
 import sys
 
 
-from app.routers import auth, files, tasks, attachments, metadata
+from app.routers import auth, files, tasks, attachments, metadata,scene
 from app.routers import iot  # 新增
 from app.models.user import UserRole
 from app.auth.utils import get_password_hash
@@ -31,7 +31,14 @@ MONGO_CONFIG = {
     'db_name': os.getenv('MONGO_DB_NAME')
 }
 
+from neomodel import config
 
+# 从环境变量获取 Neo4j 配置信息
+NEO4J_HOST = os.getenv('NEO4J_HOST', 'localhost')
+NEO4J_PORT = os.getenv('NEO4J_PORT', '7687')
+NEO4J_USERNAME = os.getenv('NEO4J_USERNAME', 'neo4j')
+NEO4J_PASSWORD = os.getenv('NEO4J_PASSWORD', 'password')
+config.DATABASE_URL = f"bolt://{NEO4J_USERNAME}:{NEO4J_PASSWORD}@{NEO4J_HOST}:{NEO4J_PORT}"
 
 # Windows 下强制使用 SelectorEventLoop
 if os.name == "nt":
@@ -60,6 +67,7 @@ app.include_router(tasks.router, prefix="/tasks", tags=["任务管理"])
 app.include_router(attachments.router, prefix="/attachments", tags=["附件管理"])
 app.include_router(metadata.router, prefix="/metadata", tags=["元数据管理"])
 app.include_router(iot.router, prefix="/iot", tags=["iot"])  # 新增
+app.include_router(scene.router, prefix="", tags=["场景管理"])
 
 # MongoDB连接
 client = AsyncIOMotorClient(MONGO_URL)

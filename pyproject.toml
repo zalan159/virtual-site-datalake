@@ -22,7 +22,8 @@ dependencies = [
   "redis==5.0.1",
   "requests==2.31.0",
   "aioredis==2.0.1",
-  "aiomqtt==2.4.0"
+  "aiomqtt==2.4.0",
+  "neomodel==5.4.5"
 ]
 
 [build-system]
