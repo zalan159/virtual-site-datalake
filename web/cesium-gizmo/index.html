@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>A Gizmo for Cesium Primitive</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/cesium@1.120.0/Build/Cesium/Widgets/widgets.min.css"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/cesium@1.120.0/Build/CesiumUnminified/Cesium.js"></script>
+    <style>
+      html,
+      body,
+      #cesiumContainer {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+
+      #toolbar {
+        background: rgba(42, 42, 42, 0.8);
+        padding: 4px;
+        border-radius: 4px;
+        position: absolute;
+        top: 10px;
+        left: 10px;
+      }
+
+      #toolbar input {
+        vertical-align: middle;
+        padding-top: 2px;
+        padding-bottom: 2px;
+      }
+
+      .actions {
+        position: absolute;
+        margin: 10px;
+        top: 0;
+        left: 0;
+        z-index: 99;
+      }
+
+      .results {
+        position: absolute;
+        margin: 10px;
+        top: 30px;
+        left: 0;
+        z-index: 99;
+        background-color: white;
+        color: black;
+        padding: 10px;
+        border-radius: 5px;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="cesiumContainer">
+      <div class="actions">
+        <button id="translate">Translate</button>
+        <button id="rotate">Rotate</button>
+        <button id="uniform_scale">Uniform Scale</button>
+        <button id="scale">Scale</button>
+      </div>
+      <div class="results">
+        <div id="position">position:</div>
+        <div id="rotation">rotation:</div>
+        <div id="scale_value">scale:</div>
+      </div>
+    </div>
+    <script type="module">
+      // window.CESIUM_BASE_URL =
+      //   "https://cdn.jsdelivr.net/npm/cesium@1.120.0/Build/Cesium";
+      import CesiumGizmo from './src/CesiumGizmo.js';
+      import GizmoPrimitive from './src/GizmoPrimitive.js';
+
+      const viewer = new Cesium.Viewer('cesiumContainer', {
+        baseLayerPicker: false,
+        timeline: false,
+        animation: false,
+      });
+
+      window._viewer = viewer;
+      viewer.scene.globe.depthTestAgainstTerrain = true;
+
+      viewer.imageryLayers.removeAll();
+      viewer.imageryLayers.addImageryProvider(
+        new Cesium.UrlTemplateImageryProvider({
+          url: 'http://www.google.com/maps/vt?lyrs=s@800&x={x}&y={y}&z={z}',
+          maximumLevel: 5,
+        })
+      );
+
+      viewer.scene.primitives.add(
+        await Cesium.Model.fromGltfAsync({
+          url: './model/CesiumBalloon.glb',
+          modelMatrix: Cesium.Transforms.headingPitchRollToFixedFrame(
+            Cesium.Cartesian3.fromDegrees(0, 0, 50),
+            new Cesium.HeadingPitchRoll(0, 0, 0)
+          ),
+          debugShowBoundingVolume: false,
+          scale: 1,
+        })
+      );
+
+      viewer.scene.primitives.add(
+        await Cesium.Model.fromGltfAsync({
+          url: './model/CesiumBalloon.glb',
+          modelMatrix: Cesium.Transforms.headingPitchRollToFixedFrame(
+            Cesium.Cartesian3.fromDegrees(0.0002, 0, 50),
+            new Cesium.HeadingPitchRoll(
+              Cesium.Math.toRadians(-45),
+              Cesium.Math.toRadians(-35),
+              0
+            )
+          ),
+          debugShowBoundingVolume: false,
+          scale: 2,
+        })
+      );
+
+      viewer.camera.setView({
+        destination: Cesium.Cartesian3.fromDegrees(0.0001, -0.0005, 100),
+        orientation: {
+          heading: 0,
+          pitch: Cesium.Math.toRadians(-35),
+          roll: 0,
+        },
+      });
+
+      const gizmo = new CesiumGizmo(viewer, {
+        show: true,
+        onDragMoving: (res) => {
+          if (res.mode === CesiumGizmo.Mode.TRANSLATE) {
+            const carto = Cesium.Cartographic.fromCartesian(res.result);
+            document.getElementById(
+              'position'
+            ).innerText = `position: ${Cesium.Math.toDegrees(
+              carto.longitude
+            )}, ${Cesium.Math.toDegrees(carto.latitude)}, ${carto.height}`;
+
+            console.log('position', {
+              lng: Cesium.Math.toDegrees(carto.longitude),
+              lat: Cesium.Math.toDegrees(carto.latitude),
+              height: carto.height,
+            });
+          }
+
+          if (res.mode === CesiumGizmo.Mode.ROTATE) {
+            document.getElementById(
+              'rotation'
+            ).innerText = `rotation: ${Cesium.Math.toDegrees(
+              res.result.heading
+            )}, ${Cesium.Math.toDegrees(
+              res.result.pitch
+            )}, ${Cesium.Math.toDegrees(res.result.roll)}`;
+
+            console.log('rotation', {
+              heading: Cesium.Math.toDegrees(res.result.heading),
+              pitch: Cesium.Math.toDegrees(res.result.pitch),
+              roll: Cesium.Math.toDegrees(res.result.roll),
+            });
+          }
+
+          if (
+            res.mode === CesiumGizmo.Mode.UNIFORM_SCALE ||
+            res.mode === CesiumGizmo.Mode.SCALE
+          ) {
+            document.getElementById(
+              'scale_value'
+            ).innerText = `scale: ${res.result}`;
+            console.log('scale', res.result);
+          }
+        },
+      });
+
+      window._gizmo = gizmo;
+
+      document.getElementById('translate').onclick = () => {
+        gizmo.mode = CesiumGizmo.Mode.TRANSLATE;
+      };
+
+      document.getElementById('rotate').onclick = () => {
+        gizmo.mode = CesiumGizmo.Mode.ROTATE;
+      };
+
+      document.getElementById('uniform_scale').onclick = () => {
+        gizmo.mode = CesiumGizmo.Mode.UNIFORM_SCALE;
+      };
+
+      document.getElementById('scale').onclick = () => {
+        gizmo.mode = CesiumGizmo.Mode.SCALE;
+      };
+    </script>
+  </body>
+</html>
