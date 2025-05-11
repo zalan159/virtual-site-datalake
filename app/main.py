@@ -44,7 +44,7 @@ config.DATABASE_URL = f"bolt://{NEO4J_USERNAME}:{NEO4J_PASSWORD}@{NEO4J_HOST}:{N
 if os.name == "nt":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 app = FastAPI(
-    title="GLTF文件存储系统",
+    title="灵境孪生中台",
     description="支持用户认证的GLTF文件存储系统API",
     version="1.0.0"
 )

@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // 创建axios实例
 const api = axios.create({
-  baseURL: 'http://127.0.0.1:8000',
+  baseURL: '/api',
   timeout: 300000,
   withCredentials: true, // 允许跨域请求携带凭证
 });

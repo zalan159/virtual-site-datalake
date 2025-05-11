@@ -1,6 +1,6 @@
 // components/AssetTabs.tsx
 import React from 'react';
-import { Tabs, Spin, Button, Typography } from 'antd';
+import { Tabs, Spin, Button, Typography, Card } from 'antd';
 import { DownloadOutlined } from '@ant-design/icons';
 import { ModelAsset } from '../hooks/useModelAssets';
 import { MaterialDefinition } from '../hooks/useCesiumDragAndDrop';
@@ -47,41 +47,33 @@ const ModelAssetCard: React.FC<ModelAssetCardProps> = ({ model, onDragStart }) =
   };
 
   return (
-    <div
+    <Card
       key={modelId}
-      style={{
-        width: 80,
-        padding: '8px 0',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#fff',
-        border: '1px solid #e6e6e6',
-        borderRadius: 8,
-        boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+      style={{ width: 80, padding: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
+      styles={{
+        body: { padding: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }
       }}
     >
       <CubeIcon
         draggable
         onDragStart={e => onDragStart(e, modelId)}
       />
-      <Text style={{ fontSize: 12, color: '#333', margin: '4px 0', textAlign: 'center', width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 4px' }} title={modelName}>
+      <Text style={{ fontSize: 12, margin: '4px 0', textAlign: 'center', width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 4px' }} title={modelName}>
         {modelName}
       </Text>
       <Button
         type="link"
         size="small"
         icon={<DownloadOutlined />}
-        style={{ padding: 0, height: 20, fontSize: 12 }} // 调整大小
+        style={{ padding: 0, height: 20, fontSize: 12 }}
         onClick={e => {
-          e.stopPropagation(); // 防止触发拖拽
+          e.stopPropagation();
           handleDownload();
         }}
       >
         下载
       </Button>
-    </div>
+    </Card>
   );
 };
 
@@ -92,15 +84,18 @@ interface MaterialAssetCardProps {
 }
 
 const MaterialAssetCard: React.FC<MaterialAssetCardProps> = ({ material, onDragStart }) => (
-  <div
+  <Card
     key={material.id}
     draggable
     onDragStart={e => onDragStart(e, material.id)}
-    style={{ width: 80, height: 80, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#fff', border: '1px solid #e6e6e6', borderRadius: 8, cursor: 'grab' }}
+    style={{ width: 80, height: 80, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRadius: 8, cursor: 'grab', padding: 0 }}
+    styles={{
+      body: { padding: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }
+    }}
   >
     {material.icon}
-    <Text style={{ fontSize: 12, color: '#333', margin: '4px 0', textAlign: 'center' }}>{material.name}</Text>
-  </div>
+    <Text style={{ fontSize: 12, margin: '4px 0', textAlign: 'center' }}>{material.name}</Text>
+  </Card>
 );
 
 interface AssetTabsProps {
@@ -152,20 +147,17 @@ export const AssetTabs: React.FC<AssetTabsProps> = ({
   ];
 
   return (
-    <div
+    <Card
       style={{
-        position: 'absolute',
-        left: 0,
-        bottom: 0,
+        height: '100%',
         width: '100%',
-        height: '25%', // 稍微增加高度以便容纳
-        background: '#fafafa',
-        borderTop: '1px solid #eee',
         overflowY: 'auto',
-        zIndex: 20,
         padding: 0,
         display: 'flex',
         flexDirection: 'column',
+      }}
+      styles={{
+        body: { padding: 0, height: '100%', display: 'flex', flexDirection: 'column' }
       }}
     >
       <Tabs
@@ -173,6 +165,6 @@ export const AssetTabs: React.FC<AssetTabsProps> = ({
         style={{ flex: 1, padding: '0 16px' }}
         items={items}
       />
-    </div>
+    </Card>
   );
 };

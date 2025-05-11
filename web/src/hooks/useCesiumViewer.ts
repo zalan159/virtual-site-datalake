@@ -6,12 +6,15 @@ import * as Cesium from 'cesium';
 // 确保 Cesium 全局 Token 设置 (如果需要)
 // Cesium.Ion.defaultAccessToken = 'YOUR_CESIUM_ION_TOKEN';
 
-export const useCesiumViewer = (cesiumContainerRef: React.RefObject<HTMLDivElement>) => {
+export const useCesiumViewer = (
+  cesiumContainerRef: React.RefObject<HTMLDivElement>,
+  origin?: { longitude: number; latitude: number; height: number }
+) => {
   const viewerRef = useRef<Viewer | null>(null);
 
   useEffect(() => {
     let viewer: Viewer | undefined;
-    if (cesiumContainerRef.current && !viewerRef.current) { // 防止重复初始化
+    if (cesiumContainerRef.current && !viewerRef.current) {
       viewer = new Viewer(cesiumContainerRef.current, {
         timeline: false,
         animation: false,
@@ -22,15 +25,23 @@ export const useCesiumViewer = (cesiumContainerRef: React.RefObject<HTMLDivEleme
         geocoder: false,
         navigationHelpButton: false,
         infoBox: false,
-        selectionIndicator: false, // Gizmo 会处理选中指示
-        // 如果需要更高质量的地形或影像，可以在这里配置
-        // terrainProvider: await Cesium.createWorldTerrainAsync(),
-        // imageryProvider: Cesium.createWorldImagery(),
+        selectionIndicator: false,  
+        contextOptions: {
+            webgl: {
+              preserveDrawingBuffer: true
+            }
+          }
       });
 
+      // 根据 origin 参数飞行到指定位置，如果没有则使用默认值
+      const destination = origin
+        ? Cartesian3.fromDegrees(origin.longitude, origin.latitude, origin.height)
+        : Cartesian3.fromDegrees(113.2644, 23.1291, 10000); // 默认值
+
       viewer.camera.flyTo({
-        destination: Cartesian3.fromDegrees(113.2644, 23.1291, 10000),
+        destination,
       });
+
       viewerRef.current = viewer;
     }
 
@@ -40,7 +51,7 @@ export const useCesiumViewer = (cesiumContainerRef: React.RefObject<HTMLDivEleme
         viewerRef.current = null;
       }
     };
-  }, [cesiumContainerRef]);
+  }, [cesiumContainerRef, origin]); // 添加 origin 到依赖项
 
   return viewerRef;
 };

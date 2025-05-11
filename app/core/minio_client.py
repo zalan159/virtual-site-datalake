@@ -1,6 +1,7 @@
 from minio import Minio
 from dotenv import load_dotenv
 import os
+import json
 
 # 加载.env文件
 load_dotenv()
@@ -17,7 +18,7 @@ minio_client = Minio(
 SOURCE_BUCKET_NAME = "sourece-files"  # 源文件存储桶
 CONVERTED_BUCKET_NAME = "converted-files"  # 转换后文件存储桶
 ATTACHMENT_BUCKET_NAME = "attachments"  # 附件存储桶
-
+PREVIEW_BUCKET_NAME = "preview"
 # 检查并创建MinIO bucket
 def check_and_create_bucket():
     try:
@@ -41,5 +42,27 @@ def check_and_create_bucket():
             print(f"MinIO bucket '{ATTACHMENT_BUCKET_NAME}' 已创建")
         else:
             print(f"MinIO bucket '{ATTACHMENT_BUCKET_NAME}' 已存在")
+
+        # 检查并创建预览图存储桶
+        if not minio_client.bucket_exists(PREVIEW_BUCKET_NAME):
+            minio_client.make_bucket(PREVIEW_BUCKET_NAME)
+            print(f"MinIO bucket '{PREVIEW_BUCKET_NAME}' 已创建")
+        else:
+            print(f"MinIO bucket '{PREVIEW_BUCKET_NAME}' 已存在")
+
+        # 设置scene-preview桶为公开
+        policy_readonly = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {"AWS": ["*"]},
+                    "Action": ["s3:GetObject"],
+                    "Resource": [f"arn:aws:s3:::{PREVIEW_BUCKET_NAME}/*"]
+                }
+            ]
+        }
+        minio_client.set_bucket_policy(PREVIEW_BUCKET_NAME, json.dumps(policy_readonly))
+        print(f"MinIO bucket '{PREVIEW_BUCKET_NAME}' 已设置为公开")
     except Exception as e:
         print(f"创建MinIO bucket时出错: {str(e)}") 

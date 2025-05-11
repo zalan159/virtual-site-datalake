@@ -121,100 +121,110 @@ const UserSettings: React.FC = () => {
     <div style={{ maxWidth: 600, margin: '0 auto', padding: '24px' }}>
       <h2>用户设置</h2>
       
-      <Tabs defaultActiveKey="password">
-        <TabPane tab="修改密码" key="password">
-          <Form
-            form={passwordForm}
-            layout="vertical"
-            onFinish={onPasswordFinish}
-            style={{ maxWidth: 400 }}
-          >
-            <Form.Item
-              label="当前密码"
-              name="oldPassword"
-              rules={[{ required: true, message: '请输入当前密码' }]}
-            >
-              <Input.Password />
-            </Form.Item>
-
-            <Form.Item
-              label="新密码"
-              name="newPassword"
-              rules={[
-                { required: true, message: '请输入新密码' },
-                { min: 6, message: '密码长度不能小于6位' }
-              ]}
-            >
-              <Input.Password />
-            </Form.Item>
-
-            <Form.Item
-              label="确认新密码"
-              name="confirmPassword"
-              dependencies={['newPassword']}
-              rules={[
-                { required: true, message: '请确认新密码' },
-                ({ getFieldValue }) => ({
-                  validator(_, value) {
-                    if (!value || getFieldValue('newPassword') === value) {
-                      return Promise.resolve();
-                    }
-                    return Promise.reject(new Error('两次输入的密码不一致'));
-                  },
-                }),
-              ]}
-            >
-              <Input.Password />
-            </Form.Item>
-
-            <Form.Item>
-              <Button type="primary" htmlType="submit" loading={loading} block>
-                修改密码
-              </Button>
-            </Form.Item>
-          </Form>
-        </TabPane>
-        
-        <TabPane tab="修改用户名" key="username">
-          <Form
-            form={usernameForm}
-            layout="vertical"
-            onFinish={onUsernameFinish}
-            style={{ maxWidth: 400 }}
-          >
-            <Form.Item
-              label="新用户名"
-              name="newUsername"
-              rules={[
-                { required: true, message: '请输入新用户名' },
-                { min: 3, message: '用户名至少3个字符' }
-              ]}
-            >
-              <Input />
-            </Form.Item>
-
-            <Form.Item>
-              <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-                <Button 
-                  onClick={checkUsername} 
-                  loading={checkingUsername}
-                  style={{ width: '48%' }}
+      <Tabs 
+        defaultActiveKey="password"
+        items={[
+          {
+            key: 'password',
+            label: '修改密码',
+            children: (
+              <Form
+                form={passwordForm}
+                layout="vertical"
+                onFinish={onPasswordFinish}
+                style={{ maxWidth: 400 }}
+              >
+                <Form.Item
+                  label="当前密码"
+                  name="oldPassword"
+                  rules={[{ required: true, message: '请输入当前密码' }]}
                 >
-                  检查用户名
-                </Button>
-                <Button 
-                  type="primary" 
-                  htmlType="submit" 
-                  loading={loading}
-                  style={{ width: '48%' }}
+                  <Input.Password />
+                </Form.Item>
+
+                <Form.Item
+                  label="新密码"
+                  name="newPassword"
+                  rules={[
+                    { required: true, message: '请输入新密码' },
+                    { min: 6, message: '密码长度不能小于6位' }
+                  ]}
                 >
-                  修改用户名
-                </Button>
-              </Space>
-            </Form.Item>
-          </Form>
-        </TabPane>
-      </Tabs>
+                  <Input.Password />
+                </Form.Item>
+
+                <Form.Item
+                  label="确认新密码"
+                  name="confirmPassword"
+                  dependencies={['newPassword']}
+                  rules={[
+                    { required: true, message: '请确认新密码' },
+                    ({ getFieldValue }) => ({
+                      validator(_, value) {
+                        if (!value || getFieldValue('newPassword') === value) {
+                          return Promise.resolve();
+                        }
+                        return Promise.reject(new Error('两次输入的密码不一致'));
+                      },
+                    }),
+                  ]}
+                >
+                  <Input.Password />
+                </Form.Item>
+
+                <Form.Item>
+                  <Button type="primary" htmlType="submit" loading={loading} block>
+                    修改密码
+                  </Button>
+                </Form.Item>
+              </Form>
+            )
+          },
+          {
+            key: 'username',
+            label: '修改用户名',
+            children: (
+              <Form
+                form={usernameForm}
+                layout="vertical"
+                onFinish={onUsernameFinish}
+                style={{ maxWidth: 400 }}
+              >
+                <Form.Item
+                  label="新用户名"
+                  name="newUsername"
+                  rules={[
+                    { required: true, message: '请输入新用户名' },
+                    { min: 3, message: '用户名至少3个字符' }
+                  ]}
+                >
+                  <Input />
+                </Form.Item>
+
+                <Form.Item>
+                  <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                    <Button 
+                      onClick={checkUsername} 
+                      loading={checkingUsername}
+                      style={{ width: '48%' }}
+                    >
+                      检查用户名
+                    </Button>
+                    <Button 
+                      type="primary" 
+                      htmlType="submit" 
+                      loading={loading}
+                      style={{ width: '48%' }}
+                    >
+                      修改用户名
+                    </Button>
+                  </Space>
+                </Form.Item>
+              </Form>
+            )
+          }
+        ]}
+      />
       
       {/* 设置初始密码的模态框 */}
       <Modal

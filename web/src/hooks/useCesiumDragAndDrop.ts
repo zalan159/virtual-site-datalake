@@ -17,7 +17,8 @@ export const useCesiumDragAndDrop = (
   viewerRef: React.RefObject<Viewer | null>,
   cesiumContainerRef: React.RefObject<HTMLDivElement>,
   models: ModelAsset[], // 从 useModelAssets 获取
-  materials: MaterialDefinition[] // 从主组件或其他地方传入
+  materials: MaterialDefinition[], // 从主组件或其他地方传入
+  refreshLayerStates?: () => void // 新增参数，可选
 ) => {
   const [dragLatLng, setDragLatLng] = useState<{ lon: number; lat: number } | null>(null);
 
@@ -109,9 +110,11 @@ export const useCesiumDragAndDrop = (
         (glbModel as any).id = modelData._id || modelData.id; // Cesium.Model 没有直接的 id 属性，可以这样附加
         (glbModel as any).name = modelData.name || modelData.filename;
 
-
         viewer.scene.primitives.add(glbModel);
         message.success(`模型 "${modelData.name || modelData.filename}" 已加载`);
+
+        // 拖放模型后刷新图层条目
+        if (refreshLayerStates) refreshLayerStates();
 
         // 可选：加载完成后，将相机飞到模型
         // viewer.flyTo(glbModel);
@@ -121,7 +124,7 @@ export const useCesiumDragAndDrop = (
         message.error('加载GLB失败');
       }
     }
-  }, [viewerRef, cesiumContainerRef, models, materials]);
+  }, [viewerRef, cesiumContainerRef, models, materials, refreshLayerStates]);
 
   const resetDragLatLng = () => setDragLatLng(null);
 

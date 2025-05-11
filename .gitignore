@@ -31,6 +31,7 @@ coverage.xml
 
 # 环境变量文件
 .env.local
+.env
 
 # IDE相关
 .idea/
@@ -41,3 +42,4 @@ coverage.xml
 # 操作系统相关
 .DS_Store
 Thumbs.db 
+.env

@@ -7,6 +7,12 @@ from bson import ObjectId
 from datetime import datetime
 from neomodel import db as neo_db
 from app.models.scene import SceneCreate, SceneUpdate, ScenePreviewUpdate, InstanceCreate, InstanceUpdate
+import base64
+from io import BytesIO
+from PIL import Image
+import uuid
+from app.core.minio_client import minio_client, PREVIEW_BUCKET_NAME
+import os
 
 router = APIRouter(tags=["scene"])
 
@@ -18,31 +24,106 @@ async def create_scene(
     current_user: UserInDB = Depends(get_current_active_user)
 ):
     scene = Scene(name=data.name, owner=str(current_user.id))
+    if data.origin:
+        scene.origin = data.origin
+    else:
+        scene.origin = {"longitude": 113, "latitude": 23, "height": 50}
     scene.save()
-    return {"uid": scene.uid, "name": scene.name, "owner": scene.owner}
+    return {"uid": scene.uid, "name": scene.name, "owner": scene.owner, "origin": scene.origin}
 
 @router.get("/scenes", response_model=List[dict])
 async def list_scenes(current_user: UserInDB = Depends(get_current_active_user)):
     scenes = Scene.nodes.all()
-    return [{"uid": s.uid, "name": s.name, "created_at": s.created_at, "owner": getattr(s, 'owner', None)} for s in scenes]
+    return [{
+        "uid": s.uid,
+        "name": s.name,
+        "created_at": s.created_at,
+        "owner": getattr(s, 'owner', None),
+        "preview_image": getattr(s, 'preview_image', None)
+    } for s in scenes]
 
 @router.get("/scenes/{scene_id}", response_model=dict)
 async def get_scene(scene_id: str, current_user: UserInDB = Depends(get_current_active_user)):
     scene = Scene.nodes.get_or_none(uid=scene_id)
     if not scene:
         raise HTTPException(404, "场景不存在")
-    return {"uid": scene.uid, "name": scene.name, "created_at": scene.created_at, "owner": getattr(scene, 'owner', None)}
+    
+    # 定义字段元数据
+    field_metadata = {
+        "uid": {
+            "display_name": "场景ID",
+            "editable": False,
+            "type": "string"
+        },
+        "name": {
+            "display_name": "场景名称",
+            "editable": True,
+            "type": "string"
+        },
+        "created_at": {
+            "display_name": "创建时间",
+            "editable": False,
+            "type": "datetime"
+        },
+        "updated_at": {
+            "display_name": "更新时间",
+            "editable": False,
+            "type": "datetime"
+        },
+        "owner": {
+            "display_name": "所有者",
+            "editable": False,
+            "type": "string"
+        },
+        "preview_image": {
+            "display_name": "预览图",
+            "editable": True,
+            "type": "image"
+        },
+        "origin": {
+            "display_name": "场景原点",
+            "editable": True,
+            "type": "object",
+            "properties": {
+                "longitude": {"display_name": "经度", "type": "number", "min": -180, "max": 180},
+                "latitude": {"display_name": "纬度", "type": "number", "min": -90, "max": 90},
+                "height": {"display_name": "高程", "type": "number", "min": -10000, "max": 10000}
+            }
+        }
+    }
+    
+    # 构建场景数据
+    scene_data = {
+        "uid": scene.uid,
+        "name": scene.name,
+        "created_at": scene.created_at,
+        "updated_at": getattr(scene, 'updated_at', None),
+        "owner": getattr(scene, 'owner', None),
+        "origin": getattr(scene, 'origin', None),
+        "preview_image": getattr(scene, 'preview_image', None)
+    }
+    
+    # 返回带元数据的结果
+    return {
+        "data": scene_data,
+        "metadata": field_metadata
+    }
 
 @router.put("/scenes/{scene_id}", response_model=dict)
 async def update_scene(scene_id: str, data: SceneUpdate, current_user: UserInDB = Depends(get_current_active_user)):
     scene = Scene.nodes.get_or_none(uid=scene_id)
     if not scene:
         raise HTTPException(404, "场景不存在")
-    if data.name:
-        scene.name = data.name
+    update_dict = data.dict(exclude_unset=True)
+    # 不允许通过此接口更新preview_image和只读字段
+    for field in ["preview_image", "created_at", "uid", "owner", "root"]:
+        update_dict.pop(field, None)
+    for key, value in update_dict.items():
+        setattr(scene, key, value)
     scene.updated_at = datetime.utcnow()
     scene.save()
-    return {"uid": scene.uid, "name": scene.name, "updated_at": scene.updated_at}
+    # 返回所有可见字段
+    return {"uid": scene.uid, "name": scene.name, "updated_at": scene.updated_at, "origin": getattr(scene, 'origin', None), "owner": getattr(scene, 'owner', None)}
 
 @router.delete("/scenes/{scene_id}", response_model=dict)
 async def delete_scene(scene_id: str, current_user: UserInDB = Depends(get_current_active_user)):
@@ -242,7 +323,37 @@ async def update_scene_preview_image(
     scene = Scene.nodes.get_or_none(uid=scene_id)
     if not scene:
         raise HTTPException(404, "场景不存在")
-    scene.preview_image = data.preview_image
+
+    # 1. 解析base64字符串
+    try:
+        header, b64data = data.preview_image.split(',', 1) if ',' in data.preview_image else ('', data.preview_image)
+        image_data = base64.b64decode(b64data)
+        image = Image.open(BytesIO(image_data))
+    except Exception as e:
+        raise HTTPException(400, f"图片解码失败: {str(e)}")
+
+    # 2. 保存为PNG到内存
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    buffer.seek(0)
+
+    # 3. 上传到MinIO（preview桶，文件名直接放根目录）
+    filename = f"{scene_id}_{uuid.uuid4().hex}.png"
+    minio_client.put_object(
+        PREVIEW_BUCKET_NAME,
+        filename,
+        buffer,
+        length=buffer.getbuffer().nbytes,
+        content_type="image/png"
+    )
+
+    # 4. 获取公开URL
+    minio_scheme = "https" if os.getenv("MINIO_SECURE", "false").lower() == "true" else "http"
+    minio_host = f"{minio_scheme}://{os.getenv('MINIO_HOST')}:{os.getenv('MINIO_PORT')}"
+    preview_url = f"{minio_host}/{PREVIEW_BUCKET_NAME}/{filename}"
+
+    # 5. 更新scene
+    scene.preview_image = preview_url
     scene.updated_at = datetime.utcnow()
     scene.save()
     return {"uid": scene.uid, "preview_image": scene.preview_image, "updated_at": scene.updated_at}

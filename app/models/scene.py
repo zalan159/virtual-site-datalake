@@ -48,7 +48,7 @@ class Scene(StructuredNode):
     preview_image = StringProperty()  # 新增，minio预览图链接
     created_at   = DateTimeProperty(default_now=True)
     updated_at   = DateTimeProperty(default=lambda: datetime.utcnow())
-
+    origin       = JSONProperty(default=lambda: {"longitude": 0.0, "latitude": 0.0, "height": 0.0})  # 新增，场景原点
 
     # 根节点（单向；场景只有一个 ROOT）
     root         = RelationshipTo('Instance', 'ROOT', cardinality=One)
@@ -93,9 +93,14 @@ class Instance(StructuredNode):
 
 class SceneCreate(BaseModel):
     name: str
+    origin: Optional[dict] = None  # 新增
 
 class SceneUpdate(BaseModel):
     name: Optional[str] = None
+    origin: Optional[dict] = None  # 新增
+    # 允许额外字段
+    class Config:
+        extra = "allow"
 
 class ScenePreviewUpdate(BaseModel):
     preview_image: str
