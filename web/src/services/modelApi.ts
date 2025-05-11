@@ -101,6 +101,15 @@ export const modelAPI = {
   getSupportedFormats: () => {
     return api.get('/files/supported-formats');
   },
+
+  // 更新模型预览图
+  updatePreviewImage: (fileId: string, previewImageBase64: string) => {
+    return api.put(`/files/${fileId}/preview-image`, {
+      preview_image: previewImageBase64,
+    });
+  },
+  
+ 
 };
 
 export default modelAPI; 

@@ -24,6 +24,17 @@ async def init_mongodb_indexes():
         
         # 为metadata集合创建file_id索引
         await db.metadata.create_index("file_id")
+        
+        # 为公共模型集合创建索引
+        await db.public_models.create_index("tags")  # 标签索引
+        await db.public_models.create_index("category")  # 分类索引
+        await db.public_models.create_index("sub_category")  # 子分类索引
+        await db.public_models.create_index("is_featured")  # 推荐模型索引
+        await db.public_models.create_index("download_count")  # 下载次数索引
+        await db.public_models.create_index([("category", 1), ("sub_category", 1)])  # 复合索引
+        await db.public_models.create_index([("category", 1), ("tags", 1)])  # 分类+标签复合索引
+        await db.public_models.create_index("filename", unique=False)  # 文件名索引
+        
         print("MongoDB索引初始化成功")
         
     except Exception as e:

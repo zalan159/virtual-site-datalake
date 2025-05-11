@@ -1,5 +1,5 @@
-import { Table, Button, Space, Tag, Card, Modal, Popconfirm, Form, Input, Select, Progress, App } from 'antd';
-import { PlusOutlined, DownloadOutlined, DeleteOutlined, EditOutlined, SwapOutlined, CheckCircleOutlined, LoadingOutlined, EyeOutlined } from '@ant-design/icons';
+import { Table, Button, Space, Tag, Card, Modal, Popconfirm, Form, Input, Select, Progress, App, Image, Dropdown, Menu } from 'antd';
+import { PlusOutlined, DownloadOutlined, DeleteOutlined, EditOutlined, SwapOutlined, CheckCircleOutlined, LoadingOutlined, EyeOutlined, MoreOutlined } from '@ant-design/icons';
 import { useState, useEffect, useRef } from 'react';
 import modelAPI from '../../services/modelApi';
 import { UploadOutlined } from '@ant-design/icons';
@@ -20,6 +20,7 @@ interface Model {
   upload_date: string;
   tags: string[];
   description?: string;
+  preview_image?: string;
   conversion?: {
     status: string;
     task_id?: string;
@@ -159,6 +160,7 @@ const ModelList: React.FC = () => {
       }
     } catch (error: any) {
       console.error('下载转换后模型失败:', error);
+      console.error('错误详情:', error.response?.data);
       message.error(`下载转换后模型失败: ${error.response?.data?.detail || error.message || '未知错误'}`);
     }
   };
@@ -340,6 +342,24 @@ const ModelList: React.FC = () => {
 
   const columns = [
     {
+      title: '预览图',
+      dataIndex: 'preview_image',
+      key: 'preview_image',
+      width: 80,
+      render: (src: string) => (
+        <Image.PreviewGroup>
+          <Image
+            src={src}
+            width={60}
+            height={60}
+            style={{ objectFit: 'cover', borderRadius: 4 }}
+            fallback="/logoonly.png"
+            preview={{ mask: <EyeOutlined /> }}
+          />
+        </Image.PreviewGroup>
+      ),
+    },
+    {
       title: '模型名称',
       dataIndex: 'filename',
       key: 'filename',
@@ -382,16 +402,13 @@ const ModelList: React.FC = () => {
         const modelId = record._id;
         const conversionInfo = record.conversion || {} as Model['conversion'];
         const statusInfo = conversionStatus[modelId] || {};
-        
         // 优先使用轮询获取的状态，如果没有则使用模型中的状态
         const status = statusInfo.status || conversionInfo?.status;
         const progress = statusInfo.progress || conversionInfo?.progress || 0;
-        const outputFormat = conversionInfo?.output_format || '';
-        
+        // const outputFormat = conversionInfo?.output_format || '';
         if (!status) {
           return <Tag color="default">未转换</Tag>;
         }
-        
         // 根据状态显示不同的标签和进度条
         switch (status.toLowerCase()) {
           case 'pending':
@@ -405,28 +422,7 @@ const ModelList: React.FC = () => {
             );
           case 'completed':
             return (
-              <div>
-                <Tag color="success" icon={<CheckCircleOutlined />}>已完成</Tag>
-                <Space>
-                  <Button 
-                    type="link" 
-                    size="small" 
-                    onClick={() => handleDownloadConverted(modelId)}
-                  >
-                    下载转换后文件
-                  </Button>
-                  {outputFormat.toUpperCase() === 'GLB' && (
-                    <Button 
-                      type="link" 
-                      size="small" 
-                      icon={<EyeOutlined />}
-                      onClick={() => window.open(`/preview/${modelId}`, '_blank')}
-                    >
-                      预览
-                    </Button>
-                  )}
-                </Space>
-              </div>
+              <Tag color="success" icon={<CheckCircleOutlined />}>已完成</Tag>
             );
           case 'failed':
             return <Tag color="error">转换失败</Tag>;
@@ -438,35 +434,80 @@ const ModelList: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      render: (_: any, record: Model) => (
-        <Space size="middle">
-          <Button type="link" icon={<DownloadOutlined />} onClick={() => handleDownload(record._id)}>
-            下载
-          </Button>
-          <Button type="link" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
-          </Button>
-          <Button 
-            type="link" 
-            icon={<SwapOutlined />} 
-            onClick={() => handleConvert(record)}
-            disabled={record.conversion?.status === 'PROCESSING'}
-          >
-            转换
-          </Button>
-          <Popconfirm
-            title="确认删除"
-            description="确定要删除这个模型吗？此操作不可恢复。"
-            onConfirm={() => handleDelete(record._id)}
-            okText="确认"
-            cancelText="取消"
-          >
-            <Button type="link" danger icon={<DeleteOutlined />}>
-              删除
+      render: (_: any, record: Model) => {
+        const isGLB = record.conversion?.output_format?.toUpperCase() === 'GLB';
+        const isConverted = record.conversion?.status?.toLowerCase() === 'completed';
+        const isProcessing = record.conversion?.status?.toLowerCase() === 'processing';
+        return (
+          <Space size="middle">
+            {/* 转换按钮 */}
+            <Button
+              type="link"
+              icon={<SwapOutlined />}
+              onClick={() => handleConvert(record)}
+              disabled={isProcessing}
+            >
+              转换
             </Button>
-          </Popconfirm>
-        </Space>
-      ),
+            {/* 预览按钮，仅GLB且转换完成可用 */}
+            <Button
+              type="link"
+              icon={<EyeOutlined />}
+              onClick={() => window.open(`/preview/${record._id}?hasPreviewImage=${!!record.preview_image}`, '_blank')}
+              disabled={!isConverted || !isGLB}
+            >
+              预览
+            </Button>
+            {/* 更多操作下拉菜单 */}
+            <Dropdown
+              overlay={
+                <Menu>
+                  <Menu.Item
+                    key="download"
+                    icon={<DownloadOutlined />}
+                    onClick={() => handleDownload(record._id)}
+                  >
+                    下载源文件
+                  </Menu.Item>
+                  <Menu.Item
+                    key="download-converted"
+                    icon={<DownloadOutlined />}
+                    onClick={() => handleDownloadConverted(record._id)}
+                    disabled={!isConverted}
+                  >
+                    下载转换后文件
+                  </Menu.Item>
+                  <Menu.Item
+                    key="edit"
+                    icon={<EditOutlined />}
+                    onClick={() => handleEdit(record)}
+                  >
+                    编辑
+                  </Menu.Item>
+                  <Menu.Divider />
+                  <Menu.Item
+                    key="delete"
+                    icon={<DeleteOutlined />}
+                  >
+                    <Popconfirm
+                      title="确认删除"
+                      description="确定要删除这个模型吗？此操作不可恢复。"
+                      onConfirm={() => handleDelete(record._id)}
+                      okText="确认"
+                      cancelText="取消"
+                    >
+                      <span style={{ color: 'red' }}>删除</span>
+                    </Popconfirm>
+                  </Menu.Item>
+                </Menu>
+              }
+              trigger={["click"]}
+            >
+              <Button type="link" icon={<MoreOutlined />} />
+            </Dropdown>
+          </Space>
+        );
+      },
     },
   ];
 

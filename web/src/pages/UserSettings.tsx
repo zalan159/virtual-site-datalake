@@ -89,9 +89,12 @@ const UserSettings: React.FC = () => {
       message.success('用户名修改成功');
       usernameForm.resetFields();
       
-      // 更新本地存储的用户名
+      // 更新本地存储的用户名和角色
       const userResponse = await authAPI.getCurrentUser();
       localStorage.setItem('username', userResponse.data.username);
+      if (userResponse.data.role) {
+        localStorage.setItem('role', userResponse.data.role);
+      }
       
       // 刷新页面以更新导航栏显示的用户名
       window.location.reload();

@@ -51,7 +51,24 @@ export const useCesiumViewer = (
         viewerRef.current = null;
       }
     };
-  }, [cesiumContainerRef, origin]); // 添加 origin 到依赖项
+  }, [cesiumContainerRef]); // 添加 origin 到依赖项
+
+
+  // Effect for flying to origin when it changes or on initial load
+  useEffect(() => {
+    if (viewerRef.current && !viewerRef.current.isDestroyed() && origin) {
+      console.log('useCesiumViewer: Flying to origin:', origin);
+      viewerRef.current.camera.flyTo({
+        destination: Cartesian3.fromDegrees(
+            origin.longitude,
+          origin.latitude,
+          origin.height || 1000 // 提供一个默认高度以防万一
+        ),
+        duration: 1.5, // 可以调整飞行时间，首次加载可以设为0
+      });
+    }
+  }, [origin]); // 依赖 currentOrigin
+
 
   return viewerRef;
 };

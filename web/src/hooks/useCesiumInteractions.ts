@@ -38,13 +38,20 @@ export const useCesiumInteractions = (
   }, [gizmoRef]);
 
   useEffect(() => {
-    if (!viewerRef.current) return;
-
+    // console.log('useCesiumInteractions: useEffect - 依赖项触发，开始执行/重新执行'); // 日志 A
+    if (!viewerRef.current) {
+      // console.log('useCesiumInteractions: useEffect - viewerRef 为空，中止'); // 日志 B
+      return;
+    }
+    // console.log('useCesiumInteractions: useEffect - viewerRef 有效，准备设置 handler'); // 日志 C
     const viewer = viewerRef.current;
+    // console.log('useCesiumInteractions: useEffect - 当前 Viewer 的 canvas:', viewer.scene.canvas); // <--- 打印 canvas 对象
     const handler = new ScreenSpaceEventHandler(viewer.scene.canvas);
+    // console.log('useCesiumInteractions: useEffect - ScreenSpaceEventHandler 已创建'); // 日志 D
 
     // 鼠标悬浮高亮
     handler.setInputAction((movement: any) => {
+      // console.log('MOUSE_MOVE 事件在 Cesium 画布上触发!');
       clearHighlight(); // 先恢复上一个
 
       const pickedObject = viewer.scene.pick(movement.endPosition);
@@ -57,13 +64,15 @@ export const useCesiumInteractions = (
         }
       }
     }, ScreenSpaceEventType.MOUSE_MOVE);
-
+    // console.log('useCesiumInteractions: useEffect - 事件动作已设置'); // 日志 E
     // 点击显示属性和Gizmo
     handler.setInputAction((movement: any) => {
+      // console.log('LEFT_CLICK handler triggered! Position:', movement.position); // <--- 重要日志1
       clearGizmo(); // 先清除旧的 Gizmo
       onModelSelect(null); // 清除选中状态
 
       const pickedObject = viewer.scene.pick(movement.position);
+      console.log('Picked Object in LEFT_CLICK:', pickedObject);
       if (pickedObject && pickedObject.primitive && pickedObject.primitive instanceof Model) {
         const selectedPrimitive = pickedObject.primitive;
         onModelSelect({
@@ -90,12 +99,14 @@ export const useCesiumInteractions = (
         // selectedPrimitive.color = Cesium.Color.ORANGE; // 示例：给选中的模型一个特定颜色
       } else {
         // 如果点击空白或非模型，销毁 Gizmo
+        // console.log('No valid model picked, or picked something else.'); // <--- 重要日志3
         clearGizmo();
         onModelSelect(null);
       }
     }, ScreenSpaceEventType.LEFT_CLICK);
 
     return () => {
+      // console.log('useCesiumInteractions: useEffect - CLEANUP 执行! 销毁 handler'); // <--- 日志 F (关键!)
       handler.destroy();
       clearHighlight();
       clearGizmo();

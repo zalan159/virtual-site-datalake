@@ -11,10 +11,14 @@ import asyncio
 import tempfile
 import shlex
 from dotenv import load_dotenv
+import uuid
+import base64
+from PIL import Image
 
-from app.models.user import UserInDB, FileMetadata, FileShare, ConversionStatus, FileConversion
+from app.models.user import UserInDB
+from app.models.file import FileMetadata, FileShare, ConversionStatus, FileConversion
 from app.auth.utils import get_current_active_user, db
-from app.core.minio_client import minio_client, SOURCE_BUCKET_NAME, CONVERTED_BUCKET_NAME
+from app.core.minio_client import minio_client, SOURCE_BUCKET_NAME, CONVERTED_BUCKET_NAME, PUBLIC_MODEL_BUCKET_NAME, PREVIEW_BUCKET_NAME
 from app.tasks.task_manager import TaskManager, TaskType
 from app.utils.mongo_init import get_mongo_url
 
@@ -509,4 +513,60 @@ async def get_conversion_status(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/{file_id}/preview-image", response_model=dict)
+async def update_file_preview_image(
+    file_id: str,
+    data: dict = Body(...),
+    current_user: UserInDB = Depends(get_current_active_user)
+):
+    """
+    更新文件的预览图（base64），保存到MinIO并更新MongoDB
+    - **file_id**: 文件ID
+    - **data**: {"preview_image": base64字符串}
+    - **current_user**: 当前登录用户
+    """
+    # 1. 检查文件是否存在及权限
+    file_info = await db.files.find_one({"_id": ObjectId(file_id)})
+    if not file_info:
+        raise HTTPException(404, "文件不存在")
+    if file_info["user_id"] != current_user.id and current_user.role != "admin":
+        raise HTTPException(403, "没有权限更新此文件")
+
+    # 2. 解析base64字符串
+    try:
+        preview_image_b64 = data.get("preview_image", "")
+        header, b64data = preview_image_b64.split(',', 1) if ',' in preview_image_b64 else ('', preview_image_b64)
+        image_data = base64.b64decode(b64data)
+        image = Image.open(BytesIO(image_data))
+    except Exception as e:
+        raise HTTPException(400, f"图片解码失败: {str(e)}")
+
+    # 3. 保存为PNG到内存
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    buffer.seek(0)
+
+    # 4. 上传到MinIO（preview桶，文件名用file_id+uuid）
+    filename = f"{file_id}_{uuid.uuid4().hex}.png"
+    minio_client.put_object(
+        PREVIEW_BUCKET_NAME,
+        filename,
+        buffer,
+        length=buffer.getbuffer().nbytes,
+        content_type="image/png"
+    )
+
+    # 5. 获取公开URL
+    minio_scheme = "https" if os.getenv("MINIO_SECURE", "false").lower() == "true" else "http"
+    minio_host = f"{minio_scheme}://{os.getenv('MINIO_HOST')}:{os.getenv('MINIO_PORT')}"
+    preview_url = f"{minio_host}/{PREVIEW_BUCKET_NAME}/{filename}"
+
+    # 6. 更新MongoDB
+    await db.files.update_one(
+        {"_id": ObjectId(file_id)},
+        {"$set": {"preview_image": preview_url, "updated_at": datetime.now()}}
+    )
+
+    return {"file_id": file_id, "preview_image": preview_url}
 

@@ -22,6 +22,7 @@ import { Input, Dropdown, App } from 'antd';
 import { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { authAPI } from '../services/api';
+import { routeConfig, getMenuFromRoutes } from '../router/routeConfig';
 
 const MainLayout = () => {
   const { message } = App.useApp();
@@ -43,11 +44,12 @@ const MainLayout = () => {
       try {
         const response = await authAPI.getCurrentUser();
         setUsername(response.data.username);
-        
+        if (response.data.role) {
+          localStorage.setItem('role', response.data.role);
+        }
         // 检查用户是否有密码
         const passwordResponse = await authAPI.checkHasPassword();
         setHasPassword(passwordResponse.data.has_password);
-        
         // 如果用户没有密码且不在设置页面，显示提示
         if (!passwordResponse.data.has_password && pathname !== '/settings') {
           message.warning('您尚未设置密码，请前往用户设置页面设置初始密码');
@@ -56,7 +58,6 @@ const MainLayout = () => {
         console.error('获取用户信息失败', error);
       }
     };
-
     fetchUserInfo();
   }, [pathname]);
 
@@ -71,115 +72,14 @@ const MainLayout = () => {
     }
   };
 
-  // 路由菜单配置
+  const role = localStorage.getItem('role');
+  const isAdmin = role === 'admin';
+  
+  // 使用统一配置生成路由菜单
+  const menuItems = getMenuFromRoutes(routeConfig, isAdmin);
   const route = {
     path: '/',
-    routes: [
-      {
-        path: '/home',
-        name: '首页',
-        icon: <HomeOutlined />,
-      },
-      {
-        path: '/models',
-        name: '模型管理',
-        icon: <AppstoreOutlined />,
-        routes: [
-          {
-            path: '/models/list',
-            name: '模型列表',
-            icon: <FileOutlined />,
-          },
-          {
-            path: '/models/tasks',
-            name: '任务列表',
-            icon: <TagsOutlined />,
-          },
-          {
-            path: '/models/materials',
-            name: '材质列表',
-            icon: <AppstoreOutlined />,
-          },
-          // {
-          //   path: '/models/store',
-          //   name: 'Sketchfab商店',
-          //   icon: <ShoppingOutlined />,
-          // }
-        ],
-      },
-      {
-        path: '/scenes',
-        name: '场景管理',
-        icon: <PictureOutlined />,
-      },
-      {
-        path: '/data',
-        name: '数据管理',
-        icon: <DatabaseOutlined />,
-        routes: [
-          {
-            path: '/data/metadata',
-            name: '元数据管理',
-            icon: <FileTextOutlined />,
-          },
-          {
-            path: '/data/attachments',
-            name: '附件管理',
-            icon: <PaperClipOutlined />,
-          },
-          {
-            path: '/data/template',
-            name: '数据模板',
-            icon: <FileTextOutlined />,
-          },
-          {
-            path: '/data/iot',
-            name: 'IoT数据',
-            icon: <AppstoreOutlined />,
-          },
-          {
-            path: '/data/mqtt-subscriptions',
-            name: 'MQTT订阅',
-            icon: <ApiOutlined />,
-          },
-          {
-            path: '/data/video',
-            name: '视频流数据',
-            icon: <PictureOutlined />,
-          },
-          {
-            path: '/data/gis',
-            name: 'GIS数据',
-            icon: <AppstoreOutlined />,
-          },
-          {
-            path: '/data/erp',
-            name: 'ERP数据',
-            icon: <AppstoreOutlined />,
-          },
-          {
-            path: '/data/instances',
-            name: '模型实例',
-            icon: <AppstoreOutlined />,
-          },
-        ],
-      },
-      {
-        path: '/agent',
-        name: '智能体',
-        icon: <RobotOutlined />,
-      },
-      {
-        path: '/settings',
-        name: '用户设置',
-        icon: <UserOutlined />,
-      },
-      {
-        path: '/scene-editor-standalone',
-        name: '场景编辑器(独立)',
-        icon: <AppstoreOutlined />,
-      },
-    ],
+    routes: menuItems,
   };
 
   return (

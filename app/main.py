@@ -9,7 +9,7 @@ import traceback
 import sys
 
 
-from app.routers import auth, files, tasks, attachments, metadata,scene
+from app.routers import auth, files, tasks, attachments, metadata, scene, public_models
 from app.routers import iot  # 新增
 from app.models.user import UserRole
 from app.auth.utils import get_password_hash
@@ -68,6 +68,7 @@ app.include_router(attachments.router, prefix="/attachments", tags=["附件管�
 app.include_router(metadata.router, prefix="/metadata", tags=["元数据管理"])
 app.include_router(iot.router, prefix="/iot", tags=["iot"])  # 新增
 app.include_router(scene.router, prefix="", tags=["场景管理"])
+app.include_router(public_models.router, prefix="/public-models", tags=["公共模型"])  # 添加公共模型路由
 
 # MongoDB连接
 client = AsyncIOMotorClient(MONGO_URL)

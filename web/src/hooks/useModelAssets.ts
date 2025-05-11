@@ -9,6 +9,7 @@ export interface ModelAsset {
   fileId?: string; // 兼容旧数据
   filename: string;
   name?: string; // 兼容旧数据
+  preview_image?: string; // 添加预览图字段
   conversion?: {
     output_format?: string;
   };

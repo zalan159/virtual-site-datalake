@@ -38,6 +38,7 @@ export const authAPI = {
   
   // 获取当前用户信息
   getCurrentUser: () => {
+    // 期望返回 { username, role, ... }
     return api.get('/auth/users/me');
   },
   

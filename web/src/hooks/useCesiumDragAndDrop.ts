@@ -4,7 +4,9 @@ import { Viewer, Cartesian2, Cartesian3, Cartographic, Math as CesiumMath, Trans
 import * as Cesium from 'cesium';
 import { message } from 'antd';
 import modelAPI from '../services/modelApi'; // 假设路径正确
+import { downloadPublicModel } from '../services/publicModels'; // 导入公共模型下载API
 import { ModelAsset } from './useModelAssets'; // 引入模型类型
+import { PublicModelMetadata } from '../services/publicModels'; // 引入公共模型类型
 
 export interface MaterialDefinition {
   id: string;
@@ -18,7 +20,9 @@ export const useCesiumDragAndDrop = (
   cesiumContainerRef: React.RefObject<HTMLDivElement>,
   models: ModelAsset[], // 从 useModelAssets 获取
   materials: MaterialDefinition[], // 从主组件或其他地方传入
-  refreshLayerStates?: () => void // 新增参数，可选
+  messageApi: any, // 新增参数
+  refreshLayerStates?: () => void, // 新增参数，可选
+  publicModels: PublicModelMetadata[] = [] // 新增公共模型参数
 ) => {
   const [dragLatLng, setDragLatLng] = useState<{ lon: number; lat: number } | null>(null);
 
@@ -51,6 +55,7 @@ export const useCesiumDragAndDrop = (
 
     const materialId = e.dataTransfer.getData('materialId');
     const modelId = e.dataTransfer.getData('modelId');
+    const publicModelId = e.dataTransfer.getData('publicModelId');
 
     if (materialId) {
       const rect = cesiumContainerRef.current.getBoundingClientRect();
@@ -63,16 +68,34 @@ export const useCesiumDragAndDrop = (
         const mat = materials.find(m => m.id === materialId);
         if (mat) {
           picked.primitive.customShader = mat.customShader;
-          message.success(`材质 "${mat.name}" 已应用`);
+          messageApi.success(`材质 "${mat.name}" 已应用`);
         }
       }
       return;
     }
 
+    // 获取放置位置的经纬度
+    let lon = 113.2644, lat = 23.1291, height = 0; // 默认位置
+    const dropPositionCartesian = viewer.scene.camera.pickEllipsoid(
+      new Cartesian2(e.clientX - cesiumContainerRef.current.getBoundingClientRect().left, e.clientY - cesiumContainerRef.current.getBoundingClientRect().top),
+      viewer.scene.globe.ellipsoid
+    );
+
+    if (dropPositionCartesian) {
+      const cartographic = Cartographic.fromCartesian(dropPositionCartesian);
+      lon = CesiumMath.toDegrees(cartographic.longitude);
+      lat = CesiumMath.toDegrees(cartographic.latitude);
+    }
+
+    const modelMatrix = Transforms.eastNorthUpToFixedFrame(
+      Cartesian3.fromDegrees(lon, lat, height)
+    );
+
     if (modelId) {
+      // 处理用户模型
       const modelData = models.find(m => (m._id || m.id || m.fileId) === modelId);
       if (!modelData) {
-        message.error('未找到模型数据');
+        messageApi.error('未找到模型数据');
         return;
       }
 
@@ -80,51 +103,62 @@ export const useCesiumDragAndDrop = (
         const resp = await modelAPI.getConvertedModelDownloadUrl(modelData._id || modelData.id! || modelData.fileId!); // 确保使用正确的ID
         const url = resp.data?.download_url;
         if (!url) {
-          message.error('获取GLB链接失败');
+          messageApi.error('获取GLB链接失败');
           return;
         }
-
-        let lon = 113.2644, lat = 23.1291, height = 0; // 默认位置
-        const dropPositionCartesian = viewer.scene.camera.pickEllipsoid(
-          new Cartesian2(e.clientX - cesiumContainerRef.current.getBoundingClientRect().left, e.clientY - cesiumContainerRef.current.getBoundingClientRect().top),
-          viewer.scene.globe.ellipsoid
-        );
-
-        if (dropPositionCartesian) {
-          const cartographic = Cartographic.fromCartesian(dropPositionCartesian);
-          lon = CesiumMath.toDegrees(cartographic.longitude);
-          lat = CesiumMath.toDegrees(cartographic.latitude);
-          // height = cartographic.height; // 可以获取地形高度，但通常模型放置在0或指定高度
-        }
-
-        const modelMatrix = Transforms.eastNorthUpToFixedFrame(
-          Cartesian3.fromDegrees(lon, lat, height)
-        );
 
         const glbModel = await Model.fromGltfAsync({
           url,
           modelMatrix,
           scale: 1.0, // 默认缩放
-          // id: modelData._id || modelData.id, // 给模型设置一个ID，便于后续识别
         });
         (glbModel as any).id = modelData._id || modelData.id; // Cesium.Model 没有直接的 id 属性，可以这样附加
         (glbModel as any).name = modelData.name || modelData.filename;
 
         viewer.scene.primitives.add(glbModel);
-        message.success(`模型 "${modelData.name || modelData.filename}" 已加载`);
+        messageApi.success(`模型 "${modelData.name || modelData.filename}" 已加载`);
 
         // 拖放模型后刷新图层条目
         if (refreshLayerStates) refreshLayerStates();
-
-        // 可选：加载完成后，将相机飞到模型
-        // viewer.flyTo(glbModel);
-
       } catch (err) {
         console.error('加载GLB异常', err);
-        message.error('加载GLB失败');
+        messageApi.error('加载GLB失败');
+      }
+    } else if (publicModelId) {
+      // 处理公共模型
+      const publicModelData = publicModels.find(m => m._id === publicModelId);
+      if (!publicModelData) {
+        messageApi.error('未找到公共模型数据');
+        return;
+      }
+
+      try {
+        const resp = await downloadPublicModel(publicModelId);
+        const url = resp.download_url;
+        if (!url) {
+          messageApi.error('获取公共模型下载链接失败');
+          return;
+        }
+
+        const glbModel = await Model.fromGltfAsync({
+          url,
+          modelMatrix,
+          scale: 1.0, // 默认缩放
+        });
+        (glbModel as any).id = publicModelData._id; 
+        (glbModel as any).name = publicModelData.filename;
+
+        viewer.scene.primitives.add(glbModel);
+        messageApi.success(`公共模型 "${publicModelData.filename}" 已加载`);
+
+        // 拖放模型后刷新图层条目
+        if (refreshLayerStates) refreshLayerStates();
+      } catch (err) {
+        console.error('加载公共模型异常', err);
+        messageApi.error('加载公共模型失败');
       }
     }
-  }, [viewerRef, cesiumContainerRef, models, materials, refreshLayerStates]);
+  }, [viewerRef, cesiumContainerRef, models, materials, messageApi, refreshLayerStates, publicModels]);
 
   const resetDragLatLng = () => setDragLatLng(null);
 

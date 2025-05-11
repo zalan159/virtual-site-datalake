@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from app.core.minio_client import minio_client
 from app.utils.redis import RedisService
 from app.utils.mongo_init import get_mongo_url
+from app.models.file import ConversionStatus, FileConversion
 
 # 加载 .env 文件
 load_dotenv()
@@ -430,7 +431,7 @@ class TaskManager:
             
     async def _update_file_metadata(self, task: Task, output_file_path: str):
         """更新文件元数据"""
-        from app.models.user import ConversionStatus, FileConversion
+        from app.models.file import ConversionStatus, FileConversion
         
         # 获取文件元数据
         file_metadata = await self.db.files.find_one({"_id": ObjectId(task.file_id)})

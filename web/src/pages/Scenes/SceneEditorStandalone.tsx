@@ -1,6 +1,6 @@
 // SceneEditorStandalone.tsx
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { Typography, Switch, Tabs, Form, InputNumber, Button, Spin, message, Card, Flex, Splitter } from 'antd';
+import { Typography, Switch, Tabs, Form, InputNumber, Button, Spin, Card, Flex, Splitter, App as AntdApp } from 'antd';
 import { useParams } from 'react-router-dom';
 import * as Cesium from 'cesium'; // 引入 Cesium 以便使用 CustomShader 等
 import axios from 'axios';
@@ -10,6 +10,7 @@ import { useCesiumViewer } from '../../hooks/useCesiumViewer';
 import { useModelAssets } from '../../hooks/useModelAssets';
 import { useCesiumInteractions, SelectedModelInfo } from '../../hooks/useCesiumInteractions';
 import { useCesiumDragAndDrop, MaterialDefinition } from '../../hooks/useCesiumDragAndDrop';
+import { usePublicModelAssets } from '../../hooks/usePublicModelAssets';
 
 // Components
 import { AssetTabs } from '../../components/AssetTabs';
@@ -21,6 +22,7 @@ import { getSceneDetail, updateSceneProperty, updateScenePreviewImage } from '..
 
 const { Title } = Typography;
 const { TabPane } = Tabs;
+
 
 // 材质定义 (可以移到单独的文件或从API获取)
 const editorMaterials: MaterialDefinition[] = [
@@ -47,7 +49,7 @@ const editorMaterials: MaterialDefinition[] = [
 const SceneSidebar: React.FC<{ sceneId?: string, viewerRef?: React.RefObject<any>, style?: React.CSSProperties }> = ({ sceneId, viewerRef, style }) => {
   const [sceneInfo, setSceneInfo] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-
+  const { message } = AntdApp.useApp();
   const fetchSceneData = useCallback(() => {
     if (!sceneId) return;
     setLoading(true);
@@ -207,9 +209,14 @@ const SceneEditorStandalone: React.FC = () => {
   // Model Assets Hook
   const { models, loadingModels } = useModelAssets();
 
+  // 获取公共模型数据
+  const { publicModels, loadingPublicModels } = usePublicModelAssets({
+    pageSize: 40 // 默认一次加载更多公共模型
+  });
+
   // Selected Model State
   const [selectedModelInfo, setSelectedModelInfo] = useState<SelectedModelInfo | null>(null);
-
+  
   // Cesium Interactions Hook
   const { externalClearHighlight, clearGizmo } = useCesiumInteractions(
     viewerRef,
@@ -244,12 +251,15 @@ const SceneEditorStandalone: React.FC = () => {
   }, [viewerRef]);
 
   // Cesium Drag and Drop Hook
+  const { message } = AntdApp.useApp();
   const { dragLatLng, handleDragOver, handleDrop, resetDragLatLng } = useCesiumDragAndDrop(
     viewerRef,
     cesiumContainerRef,
     models,
     editorMaterials,
-    refreshLayerStates
+    message,
+    refreshLayerStates,
+    publicModels
   );
 
   const handleCesiumMouseLeave = () => {
@@ -268,6 +278,10 @@ const SceneEditorStandalone: React.FC = () => {
 
   const handleMaterialDragStart = (e: React.DragEvent, materialId: string) => {
     e.dataTransfer.setData('materialId', materialId);
+  };
+
+  const handlePublicModelDragStart = (e: React.DragEvent, modelId: string) => {
+    e.dataTransfer.setData('publicModelId', modelId);
   };
 
   // 切换图层显示/隐藏
@@ -336,6 +350,7 @@ const SceneEditorStandalone: React.FC = () => {
               materials={editorMaterials}
               onModelDragStart={handleModelDragStart}
               onMaterialDragStart={handleMaterialDragStart}
+              onPublicModelDragStart={handlePublicModelDragStart}
             />
           </div>
         </Splitter.Panel>

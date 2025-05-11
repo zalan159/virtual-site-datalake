@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useLocation } from 'react-router-dom';
 import { Spin, App } from 'antd';
 import { 
   Engine, 
@@ -11,13 +11,16 @@ import {
   StandardMaterial, 
   Color3,
   SceneLoader,
-  PointerEventTypes
+  PointerEventTypes,
+  Tools
 } from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
 import modelAPI from '../../services/modelApi';
+import * as publicModelsAPI from '../../services/publicModels';
 
 const ModelPreviewStandalone = () => {
   const { modelId } = useParams<{ modelId: string }>();
+  const location = useLocation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,17 +29,35 @@ const ModelPreviewStandalone = () => {
   const sceneRef = useRef<Scene | null>(null);
   const { message: appMessage } = App.useApp();
 
+  // 解析URL参数
+  const searchParams = new URLSearchParams(location.search);
+  const hasPreviewImage = searchParams.get('hasPreviewImage') === 'true';
+  const isPublicModel = searchParams.get('isPublicModel') === 'true';
+
   useEffect(() => {
     const fetchModelUrl = async () => {
       if (!modelId) return;
       
       try {
         setLoading(true);
-        const response = await modelAPI.getConvertedModelDownloadUrl(modelId);
-        if (response.data && response.data.download_url) {
-          setModelUrl(response.data.download_url);
+        
+        let response;
+        if (isPublicModel) {
+          // 获取公共模型下载链接
+          response = await publicModelsAPI.downloadPublicModel(modelId);
+          if (response && response.download_url) {
+            setModelUrl(response.download_url);
+          } else {
+            setError('无法获取公共模型URL');
+          }
         } else {
-          setError('无法获取模型URL');
+          // 获取用户模型下载链接
+          response = await modelAPI.getConvertedModelDownloadUrl(modelId);
+          if (response.data && response.data.download_url) {
+            setModelUrl(response.data.download_url);
+          } else {
+            setError('无法获取模型URL');
+          }
         }
       } catch (error: any) {
         console.error('获取模型URL失败:', error);
@@ -47,7 +68,56 @@ const ModelPreviewStandalone = () => {
     };
 
     fetchModelUrl();
-  }, [modelId]);
+  }, [modelId, isPublicModel]);
+
+  // 生成预览图并上传到服务器
+  const generateAndUpdatePreviewImage = (engine: Engine, scene: Scene) => {
+    if (!modelId) return;
+    
+    // 确保场景完全渲染
+    scene.executeWhenReady(() => {
+      // 延迟一帧以确保所有内容都已渲染
+      setTimeout(() => {
+        try {
+          // 创建截图
+          Tools.CreateScreenshot(engine, scene.activeCamera!, 
+            { width: 300, height: 300 }, 
+            (data) => {
+              // data是base64格式的图像
+              console.log('预览图生成成功');
+              
+              // 根据模型类型上传预览图到服务器
+              if (isPublicModel) {
+                // 上传公共模型预览图
+                publicModelsAPI.updatePublicModelPreview(modelId, data)
+                  .then(() => {
+                    console.log('公共模型预览图上传成功');
+                    appMessage.success('预览图已更新');
+                  })
+                  .catch((error) => {
+                    console.error('公共模型预览图上传失败:', error);
+                    appMessage.error('预览图上传失败');
+                  });
+              } else {
+                // 上传用户模型预览图
+                modelAPI.updatePreviewImage(modelId, data)
+                  .then(() => {
+                    console.log('预览图上传成功');
+                    appMessage.success('预览图已更新');
+                  })
+                  .catch((error) => {
+                    console.error('预览图上传失败:', error);
+                    appMessage.error('预览图上传失败');
+                  });
+              }
+            });
+        } catch (error) {
+          console.error('生成预览图失败:', error);
+          appMessage.error('生成预览图失败');
+        }
+      }, 500); // 延迟500毫秒以确保渲染完成
+    });
+  };
 
   useEffect(() => {
     if (!modelUrl || !canvasRef.current) return;
@@ -85,6 +155,11 @@ const ModelPreviewStandalone = () => {
           await SceneLoader.ImportMeshAsync("", "", modelUrl, scene, undefined, ".glb");
           // 自动调整相机视角以适应模型
           scene.createDefaultCameraOrLight(true, true, true);
+          
+          // 如果模型没有预览图，则生成并上传
+          if (!hasPreviewImage) {
+            generateAndUpdatePreviewImage(engine, scene);
+          }
         } catch (error) {
           console.error('加载模型失败:', error);
           setError('加载模型失败');
@@ -117,7 +192,7 @@ const ModelPreviewStandalone = () => {
         sceneRef.current.dispose();
       }
     };
-  }, [modelUrl]);
+  }, [modelUrl, hasPreviewImage, modelId, isPublicModel]);
 
   return (
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
