@@ -2,6 +2,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { Viewer, ScreenSpaceEventHandler, ScreenSpaceEventType, Color, Model } from 'cesium';
 import * as Cesium from 'cesium';
+// @ts-ignore
 import CesiumGizmo from '../../cesium-gizmo/src/CesiumGizmo.js'; // 假设路径正确
 
 export interface SelectedModelInfo {
@@ -17,6 +18,7 @@ export const useCesiumInteractions = (
 ) => {
   const lastHighlightedRef = useRef<any>(null);
   const lastColorRef = useRef<Color | undefined>(undefined);
+  const highlightMaterialRef = useRef<any>(null);
 
   const clearHighlight = useCallback(() => {
     if (lastHighlightedRef.current) {
@@ -51,24 +53,25 @@ export const useCesiumInteractions = (
 
     // 鼠标悬浮高亮
     handler.setInputAction((movement: any) => {
-      // console.log('MOUSE_MOVE 事件在 Cesium 画布上触发!');
-      clearHighlight(); // 先恢复上一个
+      // // console.log('MOUSE_MOVE 事件在 Cesium 画布上触发!');
+      // clearHighlight(); // 先恢复上一个
 
-      const pickedObject = viewer.scene.pick(movement.endPosition);
-      if (pickedObject && pickedObject.primitive && pickedObject.primitive instanceof Model) {
-        const currentModel = pickedObject.primitive;
-        if (currentModel !== (gizmoRef.current?.item)) { // 如果不是当前 Gizmo 附加的模型
-             lastColorRef.current = currentModel.color ? Color.clone(currentModel.color) : undefined;
-             lastHighlightedRef.current = currentModel;
-             currentModel.color = Color.YELLOW.withAlpha(0.7);
-        }
-      }
+      // const pickedObject = viewer.scene.pick(movement.endPosition);
+      // if (pickedObject && pickedObject.primitive && pickedObject.primitive instanceof Model) {
+      //   const currentModel = pickedObject.primitive;
+      //   if (currentModel !== (gizmoRef.current?.item)) { // 如果不是当前 Gizmo 附加的模型
+      //        lastColorRef.current = currentModel.color ? Color.clone(currentModel.color) : undefined;
+      //        lastHighlightedRef.current = currentModel;
+      //        currentModel.color = Color.YELLOW.withAlpha(0.7);
+      //   }
+      // }
     }, ScreenSpaceEventType.MOUSE_MOVE);
     // console.log('useCesiumInteractions: useEffect - 事件动作已设置'); // 日志 E
     // 点击显示属性和Gizmo
     handler.setInputAction((movement: any) => {
       // console.log('LEFT_CLICK handler triggered! Position:', movement.position); // <--- 重要日志1
       clearGizmo(); // 先清除旧的 Gizmo
+      clearHighlight(); // 清除之前的高亮
       onModelSelect(null); // 清除选中状态
 
       const pickedObject = viewer.scene.pick(movement.position);
@@ -85,18 +88,25 @@ export const useCesiumInteractions = (
         gizmoRef.current = new CesiumGizmo(viewer, {
           item: selectedPrimitive,
           mode: CesiumGizmo.Mode.TRANSLATE, // 默认平移，可后续更改
-          onDragEnd: ({type, result}) => { // 或者 onDragMoving
+          onDragEnd: ({type, result}: {type: any, result: any}) => { // 或者 onDragMoving
             console.log('Gizmo drag end:', type, result);
             // 这里可以更新模型在后端或状态中的位置/旋转/缩放信息
           }
         });
 
-        // 如果点击的是选中的模型，确保它不高亮（Gizmo 作为指示器）
-        if (lastHighlightedRef.current === selectedPrimitive) {
-            clearHighlight();
+        // 设置选中模型的边缘高亮效果
+        lastHighlightedRef.current = selectedPrimitive;
+        // 保存原始颜色
+        lastColorRef.current = selectedPrimitive.color ? Color.clone(selectedPrimitive.color) : undefined;
+        
+        // 设置高亮颜色 - 使用亮橙色作为边缘高亮
+        selectedPrimitive.color = Color.ORANGE.withAlpha(0.8);
+        
+        // 如果模型支持轮廓效果，可以尝试设置轮廓
+        if (selectedPrimitive.silhouetteColor && selectedPrimitive.silhouetteSize) {
+          selectedPrimitive.silhouetteColor = Color.ORANGE;
+          selectedPrimitive.silhouetteSize = 2.0;
         }
-        // 设置选中模型的颜色（如果需要，或者依赖 Gizmo）
-        // selectedPrimitive.color = Cesium.Color.ORANGE; // 示例：给选中的模型一个特定颜色
       } else {
         // 如果点击空白或非模型，销毁 Gizmo
         // console.log('No valid model picked, or picked something else.'); // <--- 重要日志3

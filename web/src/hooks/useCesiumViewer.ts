@@ -25,7 +25,7 @@ export const useCesiumViewer = (
         geocoder: false,
         navigationHelpButton: false,
         infoBox: false,
-        selectionIndicator: false,  
+        selectionIndicator: true,  
         contextOptions: {
             webgl: {
               preserveDrawingBuffer: true
