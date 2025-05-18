@@ -10,12 +10,17 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react(), cesium()],
     server: {
+      port: 3000,
       proxy: {
         '/api': {
           target: env.VITE_BASE_URL,
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api/, ''),
         },
+      },
+      cors: {
+        origin: ['http://www.virtual-site.com', 'https://www.virtual-site.com'],
+        credentials: true,
       },
     },
   };
