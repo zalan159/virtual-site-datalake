@@ -221,55 +221,34 @@ const ModelList: React.FC = () => {
   };
 
   // 处理转换模型
-  const handleConvert = (model: Model) => {
+  const handleConvert = async (model: Model) => {
     setCurrentModel(model);
-    convertForm.resetFields();
-    setConvertModalVisible(true);
-  };
-
-  // 执行转换
-  const executeConvert = async () => {
-    if (!currentModel) return;
-    
+    // 直接执行转换为GLB格式
     try {
-      const values = await convertForm.validateFields();
-      console.log('转换表单值:', values);
-      console.log('当前模型:', currentModel);
       setConverting(true);
-      
-      // 确保outputFormat不为undefined
-      const outputFormat = values.outputFormat || undefined;
-      console.log('传递给API的outputFormat:', outputFormat);
-      
-      const response = await modelAPI.convertModel(currentModel._id, outputFormat);
-      console.log('转换API响应:', response);
-      
-      // 获取任务ID并开始轮询状态
+      const response = await modelAPI.convertModel(model._id, 'GLB');
       const taskId = response.data.task_id;
       if (taskId) {
         // 更新当前模型的转换状态
-        const updatedModels = models.map(model => {
-          if (model._id === currentModel._id) {
+        const updatedModels = models.map(m => {
+          if (m._id === model._id) {
             return {
-              ...model,
+              ...m,
               conversion: {
-                ...model.conversion,
+                ...m.conversion,
                 status: 'PENDING',
                 task_id: taskId,
                 progress: 0
               }
             };
           }
-          return model;
+          return m;
         });
         setModels(updatedModels);
-        
         // 开始轮询转换状态
-        startPollingConversionStatus(taskId, currentModel._id);
+        startPollingConversionStatus(taskId, model._id);
       }
-      
       message.success('模型转换任务已创建');
-      setConvertModalVisible(false);
     } catch (error: any) {
       console.error('转换模型失败:', error);
       console.error('错误详情:', error.response?.data);
@@ -279,7 +258,7 @@ const ModelList: React.FC = () => {
       setConverting(false);
     }
   };
-  
+
   // 开始轮询转换状态
   const startPollingConversionStatus = (taskId: string, modelId: string) => {
     // 清除之前的轮询
@@ -445,7 +424,7 @@ const ModelList: React.FC = () => {
               type="link"
               icon={<SwapOutlined />}
               onClick={() => handleConvert(record)}
-              disabled={isProcessing}
+              disabled={isProcessing || isConverted}
             >
               转换
             </Button>
@@ -611,6 +590,7 @@ const ModelList: React.FC = () => {
       </Modal>
 
       {/* 转换模型模态框 */}
+      {/*
       <Modal
         title="转换模型"
         open={convertModalVisible}
@@ -635,6 +615,7 @@ const ModelList: React.FC = () => {
           </Form.Item>
         </Form>
       </Modal>
+      */}
     </div>
   );
 };

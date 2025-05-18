@@ -6,10 +6,6 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import json
 from io import BytesIO
 import os
-import subprocess
-import asyncio
-import tempfile
-import shlex
 from dotenv import load_dotenv
 import uuid
 import base64
@@ -99,15 +95,49 @@ async def upload_file(
         file_data = await file.read()
         file_path = f"{current_user.id}/{datetime.now().strftime('%Y%m%d_%H%M%S')}_{file.filename}"
         
-        # 使用BytesIO包装字节数据
-        file_stream = BytesIO(file_data)
-        minio_client.put_object(
-            SOURCE_BUCKET_NAME,
-            file_path,
-            file_stream,
-            len(file_data),
-            content_type=f"application/{file_extension}"
-        )
+        # 判断是否为glb格式，若是则同时上传到转换桶和源文件桶并设置conversion为已完成
+        if file_extension == "glb":
+            # 上传到转换桶
+            file_stream1 = BytesIO(file_data)
+            minio_client.put_object(
+                CONVERTED_BUCKET_NAME,
+                file_path,
+                file_stream1,
+                len(file_data),
+                content_type=f"application/{file_extension}"
+            )
+            # 同时上传到源文件桶
+            file_stream2 = BytesIO(file_data)
+            minio_client.put_object(
+                SOURCE_BUCKET_NAME,
+                file_path,
+                file_stream2,
+                len(file_data),
+                content_type=f"application/{file_extension}"
+            )
+            # 构造conversion字段
+            conversion = FileConversion(
+                status=ConversionStatus.COMPLETED,
+                input_format="GLB",
+                output_format="GLB",
+                input_file_path=file_path,
+                output_file_path=file_path,
+                task_id=None,
+                progress=100,
+                created_at=datetime.now(),
+                updated_at=datetime.now()
+            )
+        else:
+            # 上传到源文件桶
+            file_stream = BytesIO(file_data)
+            minio_client.put_object(
+                SOURCE_BUCKET_NAME,
+                file_path,
+                file_stream,
+                len(file_data),
+                content_type=f"application/{file_extension}"
+            )
+            conversion = None
         
         # 存储元数据到MongoDB
         metadata_dict = json.loads(metadata) if metadata else {}
@@ -121,6 +151,8 @@ async def upload_file(
             "is_public": False,
             "tags": []
         })
+        if conversion:
+            metadata_dict["conversion"] = conversion.dict()
         
         result = await db.files.insert_one(metadata_dict)
         metadata_dict["_id"] = result.inserted_id
@@ -486,11 +518,16 @@ async def get_conversion_status(
     current_user: UserInDB = Depends(get_current_active_user)
 ):
     """
-    获取转换任务状态
+    获取转换任务状态 (已弃用)
+    请使用 /tasks/status/{task_id} 代替
     
     - **task_id**: 任务ID
     - **current_user**: 当前登录用户
     """
+    # 发出警告日志
+    import logging
+    logging.warning("使用已弃用的API: /files/convert/status/{task_id}，请改用 /tasks/status/{task_id}")
+    
     try:
         # 获取任务
         task_manager = TaskManager()
@@ -503,14 +540,9 @@ async def get_conversion_status(
         if task.user_id != str(current_user.id) and current_user.role != "admin":
             raise HTTPException(status_code=403, detail="没有权限查看此任务")
         
-        return {
-            "task_id": task.task_id,
-            "status": task.status,
-            "progress": task.progress,
-            "current_step": task.current_step,
-            "error_message": task.error_message,
-            "result": task.result
-        }
+        # 直接转发到新的API
+        from app.routers.tasks import get_task_status
+        return await get_task_status(task_id, current_user)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

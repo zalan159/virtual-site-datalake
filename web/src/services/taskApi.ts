@@ -17,15 +17,26 @@ export enum ConversionStep {
   COMPLETED = "completed"  // 完成
 }
 
-// 任务类型枚举
-export enum TaskType {
-  FILE_CONVERSION = "file_conversion"  // 文件转换
+// 任务类型 - 使用const而不是enum以便更灵活处理字符串值
+export const TaskType = {
+  FILE_CONVERSION: "file_conversion",  // 文件转换
+  THREEDTILES_PROCESSING: "threedtiles_processing"  // 3DTiles处理
+} as const;
+
+// TaskType类型
+export type TaskType = typeof TaskType[keyof typeof TaskType];
+
+// 处理状态接口
+export interface ProcessStatus {
+  status: string;
+  message: string;
+  tile_id?: string;
 }
 
 // 任务接口
 export interface Task {
   task_id: string;
-  task_type: TaskType;
+  task_type: string | TaskType;  // 支持直接字符串或TaskType枚举值
   user_id: string;
   file_id: string;
   input_file_path: string;
@@ -37,6 +48,13 @@ export interface Task {
   result?: any;
   created_at: string;
   updated_at: string;
+  resource_name?: string;  // 关联资源名称
+  process_status?: ProcessStatus;  // 3DTiles处理状态
+  resource_info?: {        // 关联资源详情
+    name: string;
+    size: number;
+    type: string;
+  };
 }
 
 // 错误处理函数
@@ -80,6 +98,26 @@ export const taskAPI = {
       }
       
       const response = await api.get(url);
+      return response.data;
+    } catch (error) {
+      return handleError(error);
+    }
+  },
+  
+  // 获取任务详情
+  getTask: async (taskId: string) => {
+    try {
+      const response = await api.get(`/tasks/${taskId}`);
+      return response.data;
+    } catch (error) {
+      return handleError(error);
+    }
+  },
+  
+  // 获取任务状态
+  getTaskStatus: async (taskId: string) => {
+    try {
+      const response = await api.get(`/tasks/status/${taskId}`);
       return response.data;
     } catch (error) {
       return handleError(error);

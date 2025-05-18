@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from typing import List, Optional, Dict, Any
 from app.auth.utils import get_current_active_user, db
 from app.models.user import UserInDB
-from app.models.scene import Scene, Instance, Asset
+from app.models.scene import Scene, Instance
 from bson import ObjectId
 from datetime import datetime
 from neomodel import db as neo_db
@@ -162,22 +162,32 @@ async def create_instance(
     if not scene:
         raise HTTPException(404, "场景不存在")
     parent = None
-    if data.parent_id:
-        parent = Instance.nodes.get_or_none(uid=data.parent_id)
+    if data.parent_uid:
+        parent = Instance.nodes.get_or_none(uid=data.parent_uid)
         if not parent:
             raise HTTPException(404, "父节点不存在")
     inst = Instance(name=data.name)
+    
+    # 设置资产信息
+    if data.asset_id:
+        inst.asset_id = data.asset_id
+    if data.asset_type:
+        inst.asset_type = data.asset_type
+        
     if data.transform:
         inst.transform = data.transform
     if data.properties:
         inst.properties = data.properties
     if data.materials:
         inst.materials = data.materials
+    if data.iot_binds:
+        inst.iot_binds = data.iot_binds
+    if data.video_binds:
+        inst.video_binds = data.video_binds
+    if data.file_binds:
+        inst.file_binds = data.file_binds
     inst.save()
-    if data.asset_id:
-        asset = Asset.nodes.get_or_none(asset_id=data.asset_id)
-        if asset:
-            inst.asset.connect(asset)
+    
     if parent:
         parent.children.connect(inst)
     else:
@@ -197,16 +207,19 @@ async def list_instances(scene_id: str, current_user: UserInDB = Depends(get_cur
     root = scene.root.single()
     if not root:
         return []
-    # 平铺所有instance
+    # 平铺所有instance，但排除根节点
     result = []
     def flatten(inst):
-        result.append({
-            "uid": inst.uid,
-            "name": inst.name,
-            "transform": inst.transform,
-            "materials": inst.materials,
-            "asset_uri": inst.asset.single().uri if inst.asset.single() else None
-        })
+        # 跳过根节点
+        if inst != root:
+            result.append({
+                "uid": inst.uid,
+                "name": inst.name,
+                "transform": inst.transform,
+                "materials": inst.materials,
+                "asset_id": inst.asset_id,
+                "asset_type": inst.asset_type
+            })
         for child in inst.children:
             flatten(child)
     flatten(root)
@@ -224,11 +237,12 @@ async def get_instance_tree(scene_id: str, current_user: UserInDB = Depends(get_
         return {
             "uid": inst.uid,
             "name": inst.name,
+            "asset_id": inst.asset_id,
+            "asset_type": inst.asset_type,
             "properties": inst.properties,
             "iot_binds": inst.iot_binds,
-            "file_binds": inst.file_binds,
             "video_binds": inst.video_binds,
-            "gis_layers": inst.gis_layers,
+            "file_binds": inst.file_binds,
             "children": [build_tree(child) for child in inst.children]
         }
     return build_tree(root)
@@ -240,12 +254,22 @@ async def update_instance(instance_id: str, data: InstanceUpdate, current_user: 
         raise HTTPException(404, "实例不存在")
     if data.name:
         inst.name = data.name
+    if data.asset_id:
+        inst.asset_id = data.asset_id
+    if data.asset_type:
+        inst.asset_type = data.asset_type
     if data.transform:
         inst.transform = data.transform
     if data.properties:
         inst.properties = data.properties
     if data.materials:
         inst.materials = data.materials
+    if data.iot_binds:
+        inst.iot_binds = data.iot_binds
+    if data.video_binds:
+        inst.video_binds = data.video_binds
+    if data.file_binds:
+        inst.file_binds = data.file_binds
     inst.save()
     return {"uid": inst.uid, "name": inst.name}
 
@@ -263,56 +287,7 @@ async def delete_instance(instance_id: str, current_user: UserInDB = Depends(get
     inst.delete()
     return {"message": "实例已删除"}
 
-# ---------------------- 绑定/解绑接口 ----------------------
 
-@router.post("/instances/{instance_id}/bind-iot", response_model=dict)
-async def bind_iot(instance_id: str, iot_id: str = Body(...), current_user: UserInDB = Depends(get_current_active_user)):
-    inst = Instance.nodes.get_or_none(uid=instance_id)
-    if not inst:
-        raise HTTPException(404, "实例不存在")
-    # 校验iot_id存在
-    iot_doc = await db.iot.find_one({"_id": ObjectId(iot_id)})
-    if not iot_doc:
-        raise HTTPException(404, "iot对象不存在")
-    inst.iot_binds = iot_id
-    inst.save()
-    return {"message": "已绑定"}
-
-@router.post("/instances/{instance_id}/unbind-iot", response_model=dict)
-async def unbind_iot(instance_id: str, current_user: UserInDB = Depends(get_current_active_user)):
-    inst = Instance.nodes.get_or_none(uid=instance_id)
-    if not inst:
-        raise HTTPException(404, "实例不存在")
-    inst.iot_binds = None
-    inst.save()
-    return {"message": "已解绑"}
-
-@router.post("/instances/{instance_id}/bind-attachment", response_model=dict)
-async def bind_attachment(instance_id: str, attachment_id: str = Body(...), current_user: UserInDB = Depends(get_current_active_user)):
-    inst = Instance.nodes.get_or_none(uid=instance_id)
-    if not inst:
-        raise HTTPException(404, "实例不存在")
-    # 校验attachment_id存在
-    att_doc = await db.attachments.find_one({"_id": ObjectId(attachment_id)})
-    if not att_doc:
-        raise HTTPException(404, "附件不存在")
-    inst.file_binds = attachment_id
-    inst.save()
-    # 同步更新attachment的related_instance
-    await db.attachments.update_one({"_id": ObjectId(attachment_id)}, {"$set": {"related_instance": instance_id}})
-    return {"message": "已绑定"}
-
-@router.post("/instances/{instance_id}/unbind-attachment", response_model=dict)
-async def unbind_attachment(instance_id: str, current_user: UserInDB = Depends(get_current_active_user)):
-    inst = Instance.nodes.get_or_none(uid=instance_id)
-    if not inst:
-        raise HTTPException(404, "实例不存在")
-    # 同步更新attachment的related_instance
-    if inst.file_binds:
-        await db.attachments.update_one({"_id": ObjectId(inst.file_binds)}, {"$set": {"related_instance": None}})
-    inst.file_binds = None
-    inst.save()
-    return {"message": "已解绑"}
 
 @router.put("/scenes/{scene_id}/preview-image", response_model=dict)
 async def update_scene_preview_image(
@@ -364,8 +339,181 @@ async def get_instance_bindings(instance_id: str, current_user: UserInDB = Depen
     if not inst:
         raise HTTPException(404, "实例不存在")
     return {
-        "iot_binds": inst.iot_binds,
-        "file_binds": inst.file_binds,
-        "video_binds": inst.video_binds,
-        "gis_layers": inst.gis_layers
+        "iot_binds": inst.iot_binds or [],
+        "file_binds": inst.file_binds or [],
+        "video_binds": inst.video_binds or []
     }
+
+@router.get("/instances/{instance_id}/properties", response_model=dict)
+async def get_instance_properties(instance_id: str, current_user: UserInDB = Depends(get_current_active_user)):
+    inst = Instance.nodes.get_or_none(uid=instance_id)
+    if not inst:
+        raise HTTPException(404, "实例不存在")
+    
+    # 定义字段元数据
+    field_metadata = {
+        # 增加分组信息
+        "groups": [
+            {
+                "id": "asset",
+                "name": "资产信息",
+                "fields": ["asset_id", "asset_type", "asset_metadata"]
+            },
+            {
+                "id": "instance",
+                "name": "实例属性",
+                "fields": ["uid", "name", "transform", "materials", "properties"]
+            },
+            {
+                "id": "bindings",
+                "name": "绑定关系",
+                "fields": ["iot_binds", "file_binds", "video_binds"]
+            }
+        ],
+        # 各字段的详细元数据
+        "fields": {
+            # 第一组：资产数据（不可编辑）
+            "asset_id": {
+                "display_name": "资产ID",
+                "editable": False,
+                "type": "string"
+            },
+            "asset_type": {
+                "display_name": "资产类型",
+                "editable": False,
+                "type": "string"
+            },
+            "asset_metadata": {
+                "display_name": "资产元数据",
+                "editable": False,
+                "type": "object"
+            },
+            
+            # 第二组：实例数据（可编辑）
+            "uid": {
+                "display_name": "实例ID",
+                "editable": False,  # 实例ID不可编辑
+                "type": "string"
+            },
+            "name": {
+                "display_name": "实例名称",
+                "editable": True,
+                "type": "string"
+            },
+            "transform": {
+                "display_name": "变换",
+                "editable": True,
+                "type": "object",
+                "properties": {
+                    "location": {"display_name": "位置", "type": "array"},
+                    "rotation": {"display_name": "旋转", "type": "array"},
+                    "scale": {"display_name": "缩放", "type": "array"}
+                }
+            },
+            "materials": {
+                "display_name": "材质",
+                "editable": True,
+                "type": "array"
+            },
+            "properties": {
+                "display_name": "属性",
+                "editable": True,
+                "type": "object"
+            },
+            
+            # 第三组：绑定数据（可编辑）
+            "iot_binds": {
+                "display_name": "IoT设备绑定",
+                "editable": True,
+                "type": "array"
+            },
+            "file_binds": {
+                "display_name": "文件绑定",
+                "editable": True,
+                "type": "array"
+            },
+            "video_binds": {
+                "display_name": "视频绑定",
+                "editable": True,
+                "type": "array"
+            }
+        }
+    }
+    
+    # 构建实例数据，并分组
+    instance_data = {
+        # 资产数据组
+        "asset": {
+            "asset_id": inst.asset_id,
+            "asset_type": inst.asset_type,
+            "asset_metadata": {}  # 为空，需要另行懒加载
+        },
+        
+        # 实例数据组
+        "instance": {
+            "uid": inst.uid,
+            "name": inst.name,
+            "transform": inst.transform,
+            "materials": inst.materials,
+            "properties": inst.properties
+        },
+        
+        # 绑定数据组
+        "bindings": {
+            "iot_binds": inst.iot_binds or [],
+            "file_binds": inst.file_binds or [],
+            "video_binds": inst.video_binds or []
+        }
+    }
+    
+    # 返回带元数据的结果
+    return {
+        "data": instance_data,
+        "metadata": field_metadata
+    }
+
+# 添加更新实例嵌套关系的API
+@router.post("/instances/{instance_id}/change-parent", response_model=dict)
+async def change_instance_parent(
+    instance_id: str, 
+    data: dict = Body(...), 
+    current_user: UserInDB = Depends(get_current_active_user)
+):
+    """更改实例的父级关系"""
+    # 从请求体获取新父级ID
+    new_parent_id = data.get("new_parent_id")
+    if not new_parent_id:
+        raise HTTPException(400, "missing new_parent_id")
+        
+    # 获取实例
+    instance = Instance.nodes.get_or_none(uid=instance_id)
+    if not instance:
+        raise HTTPException(404, "实例不存在")
+    
+    # 获取新父级
+    new_parent = Instance.nodes.get_or_none(uid=new_parent_id)
+    if not new_parent:
+        raise HTTPException(404, "新父级不存在")
+    
+    # 检查是否形成循环引用
+    def check_cycle(node, target_id):
+        if node.uid == target_id:
+            return True
+        for child in node.children:
+            if check_cycle(child, target_id):
+                return True
+        return False
+    
+    if check_cycle(instance, new_parent_id):
+        raise HTTPException(400, "不能形成循环引用")
+    
+    # 事务操作：断开旧连接，建立新连接
+    with neo_db.transaction:
+        # 断开与当前父级的连接
+        for parent in instance.parent:
+            parent.children.disconnect(instance)
+        
+        # 建立与新父级的连接
+        new_parent.children.connect(instance)
+    
+    return {"message": "实例父级已更新", "instance_id": instance_id, "new_parent_id": new_parent_id}

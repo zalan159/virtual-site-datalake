@@ -20,6 +20,7 @@ CONVERTED_BUCKET_NAME = "converted-files"  # 转换后文件存储桶
 ATTACHMENT_BUCKET_NAME = "attachments"  # 附件存储桶
 PREVIEW_BUCKET_NAME = "preview"
 PUBLIC_MODEL_BUCKET_NAME = "public-models"  # 公共模型存储桶
+THREEDTILES_BUCKET_NAME = "threedtiles"  # 3DTiles存储桶
 
 # 检查并创建MinIO bucket
 def check_and_create_bucket():
@@ -58,6 +59,13 @@ def check_and_create_bucket():
             print(f"MinIO bucket '{PUBLIC_MODEL_BUCKET_NAME}' 已创建")
         else:
             print(f"MinIO bucket '{PUBLIC_MODEL_BUCKET_NAME}' 已存在")
+            
+        # 检查并创建3DTiles存储桶
+        if not minio_client.bucket_exists(THREEDTILES_BUCKET_NAME):
+            minio_client.make_bucket(THREEDTILES_BUCKET_NAME)
+            print(f"MinIO bucket '{THREEDTILES_BUCKET_NAME}' 已创建")
+        else:
+            print(f"MinIO bucket '{THREEDTILES_BUCKET_NAME}' 已存在")
 
         # 设置scene-preview桶为公开
         policy_readonly = {
@@ -88,5 +96,20 @@ def check_and_create_bucket():
         }
         minio_client.set_bucket_policy(PUBLIC_MODEL_BUCKET_NAME, json.dumps(policy_readonly_public))
         print(f"MinIO bucket '{PUBLIC_MODEL_BUCKET_NAME}' 已设置为公开")
+        
+        # 设置 threedtiles 桶为公开
+        policy_readonly_threedtiles = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {"AWS": ["*"]},
+                    "Action": ["s3:GetObject"],
+                    "Resource": [f"arn:aws:s3:::{THREEDTILES_BUCKET_NAME}/*"]
+                }
+            ]
+        }
+        minio_client.set_bucket_policy(THREEDTILES_BUCKET_NAME, json.dumps(policy_readonly_threedtiles))
+        print(f"MinIO bucket '{THREEDTILES_BUCKET_NAME}' 已设置为公开")
     except Exception as e:
         print(f"创建MinIO bucket时出错: {str(e)}") 

@@ -1,175 +1,33 @@
 // SceneEditorStandalone.tsx
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { Typography, Switch, Tabs, Form, InputNumber, Button, Spin, Card, Flex, Splitter, App as AntdApp } from 'antd';
+import { Typography,  Spin, Splitter, App as AntdApp, } from 'antd';
 import { useParams } from 'react-router-dom';
 import * as Cesium from 'cesium'; // 引入 Cesium 以便使用 CustomShader 等
-import axios from 'axios';
+// @ts-ignore
+import CesiumGizmo from '../../../cesium-gizmo/src/CesiumGizmo.js';
 
 // Hooks
 import { useCesiumViewer } from '../../hooks/useCesiumViewer';
 import { useModelAssets } from '../../hooks/useModelAssets';
 import { useCesiumInteractions, SelectedModelInfo } from '../../hooks/useCesiumInteractions';
-import { useCesiumDragAndDrop, MaterialDefinition } from '../../hooks/useCesiumDragAndDrop';
+import { useCesiumDragAndDrop } from '../../hooks/useCesiumDragAndDrop';
 import { usePublicModelAssets } from '../../hooks/usePublicModelAssets';
 
 // Components
-import { AssetTabs } from '../../components/AssetTabs';
+import { AssetTabs } from '../../components/AssetTabs.js';
 import { SelectedModelPropertiesPanel } from '../../components/SelectedModelPropertiesPanel';
 import { LayerDrawer, LayerInfo } from '../../components/LayerDrawer';
 import { MenuOutlined } from '@ant-design/icons';
-import DynamicPropertyForm from '../../components/DynamicPropertyForm';
-import { getSceneDetail, updateSceneProperty, updateScenePreviewImage } from '../../services/sceneApi';
+import { getSceneDetail } from '../../services/sceneApi';
+
+// 新组件
+import SceneSidebar from '../../components/scenes/SceneSidebar';
+import LoadingIndicator from '../../components/scenes/LoadingIndicator';
+
+// 常量
+import { editorMaterials } from '../../constants/editorMaterials';
 
 const { Title } = Typography;
-const { TabPane } = Tabs;
-
-
-// 材质定义 (可以移到单独的文件或从API获取)
-const editorMaterials: MaterialDefinition[] = [
-  {
-    id: 'red',
-    name: '红色',
-    icon: (
-      <svg width={40} height={40} viewBox="0 0 40 40" fill="none">
-        <rect x="8" y="8" width="24" height="24" rx="4" fill="#ff4d4f" stroke="#a8071a" strokeWidth="2" />
-        <rect x="14" y="14" width="12" height="12" rx="2" fill="#fff1f0" stroke="#ff4d4f" strokeWidth="1.5" />
-      </svg>
-    ),
-    customShader: new Cesium.CustomShader({
-      fragmentShaderText: `
-        void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
-          material.diffuse = vec3(1.0, 0.0, 0.0);
-        }
-      `
-    })
-  },
-  // 添加更多材质...
-];
-
-const SceneSidebar: React.FC<{ sceneId?: string, viewerRef?: React.RefObject<any>, style?: React.CSSProperties }> = ({ sceneId, viewerRef, style }) => {
-  const [sceneInfo, setSceneInfo] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const { message } = AntdApp.useApp();
-  const fetchSceneData = useCallback(() => {
-    if (!sceneId) return;
-    setLoading(true);
-    getSceneDetail(sceneId)
-      .then(res => {
-        console.log('场景数据:', res.data);
-        setSceneInfo(res.data);
-      })
-      .finally(() => setLoading(false));
-  }, [sceneId]);
-
-  useEffect(() => {
-    fetchSceneData();
-  }, [fetchSceneData]);
-
-  // 保存所有属性（忽略预览图）
-  const handleSave = async (values: any): Promise<void> => {
-    if (!sceneId) return;
-    // 只保存非预览图字段
-    const { preview_image, ...rest } = values || {};
-    if (Object.keys(rest).length > 0) {
-      await updateSceneProperty(sceneId, rest);
-    }
-    // 预览图完全不在这里处理
-  };
-
-  // 新增：飞到原点
-  const handleFlyToOrigin = (origin: {longitude: number, latitude: number, height: number}) => {
-    if (!origin || !viewerRef?.current) return;
-    const { longitude, latitude, height } = origin;
-    if (
-      typeof longitude === 'number' &&
-      typeof latitude === 'number' &&
-      typeof height === 'number'
-    ) {
-      viewerRef.current.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, height || 1000),
-        duration: 1.5
-      });
-    }
-  };
-
-  // 新增：更新预览图
-  const handleUpdatePreviewImage = async () => {
-    if (!sceneId || !viewerRef?.current) return;
-    try {
-      // 强制渲染一帧
-      viewerRef.current.scene.requestRender();
-      // 等待下一帧（确保渲染完成）
-      await new Promise(resolve => setTimeout(resolve, 100));
-      // 获取 Cesium canvas 截图
-      const canvas = viewerRef.current.scene.canvas;
-      const base64 = canvas.toDataURL('image/png');
-      await updateScenePreviewImage(sceneId, base64);
-      message.success('预览图已更新');
-      fetchSceneData();
-    } catch (e) {
-      message.error('预览图更新失败');
-    }
-  };
-
-  return (
-    <Card
-      style={{
-        position: 'absolute',
-        top: 0,
-        right: 0,
-        width: '20vw',
-        height: '80vh',
-        zIndex: 100,
-        borderRadius: '8px 0 0 8px',
-        overflow: 'auto',
-        padding: 0,
-        ...style
-      }}
-      styles={{
-        body: { padding: '16px 0', height: '100%', overflow: 'auto' }
-      }}
-    >
-      {!sceneInfo ? (
-        <Spin spinning={loading} style={{ margin: '100px auto', display: 'block', textAlign: 'center' }}>
-          <div>加载场景数据...</div>
-        </Spin>
-      ) : (
-        <Tabs 
-          defaultActiveKey="scene" 
-          style={{ width: '100%' }}
-          items={[
-            {
-              key: 'scene',
-              label: '场景设置',
-              children: (
-                <DynamicPropertyForm
-                  entityId={sceneId || ''}
-                  data={sceneInfo.data}
-                  metadata={sceneInfo.metadata}
-                  loading={loading}
-                  onSave={handleSave}
-                  onRefresh={fetchSceneData}
-                  sectionTitle="场景属性"
-                  onFlyToOrigin={handleFlyToOrigin}
-                  onUpdatePreviewImage={handleUpdatePreviewImage}
-                />
-              )
-            },
-            {
-              key: 'instance',
-              label: '实例管理',
-              children: (
-                <div style={{ padding: '16px', color: '#999' }}>
-                  实例管理功能开发中...
-                </div>
-              )
-            }
-          ]}
-        />
-      )}
-    </Card>
-  );
-};
 
 const SceneEditorStandalone: React.FC = () => {
   const { sceneId } = useParams<{ sceneId?: string }>();
@@ -179,6 +37,7 @@ const SceneEditorStandalone: React.FC = () => {
   // 场景数据状态
   const [sceneInfo, setSceneInfo] = useState<any>(null);
   const [loadingScene, setLoadingScene] = useState(false);
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
 
   // 获取场景数据
   const fetchSceneData = useCallback(() => {
@@ -203,14 +62,31 @@ const SceneEditorStandalone: React.FC = () => {
     height: 10000,
   };
 
+  console.log('场景编辑器中的origin:', {
+    sceneInfoOrigin: sceneInfo?.data?.origin,
+    finalOrigin: origin
+  });
+
   // Cesium Viewer Hook，依赖 origin
-  const viewerRef = useCesiumViewer(cesiumContainerRef, origin);
+  const { viewerRef, loadingInstances, loadingProgress, loadSceneInstances } = useCesiumViewer(cesiumContainerRef, origin);
+
+  // 场景加载完成后加载场景实例
+  useEffect(() => {
+    if (sceneId && viewerRef.current && origin && sceneInfo) {
+      console.log('开始加载场景实例...', {
+        sceneId,
+        origin,
+        sceneInfo
+      });
+      loadSceneInstances(sceneId);
+    }
+  }, [sceneId, viewerRef, origin, sceneInfo, loadSceneInstances]);
 
   // Model Assets Hook
   const { models, loadingModels } = useModelAssets();
 
   // 获取公共模型数据
-  const { publicModels, loadingPublicModels } = usePublicModelAssets({
+  const { publicModels} = usePublicModelAssets({
     pageSize: 40 // 默认一次加载更多公共模型
   });
 
@@ -221,7 +97,9 @@ const SceneEditorStandalone: React.FC = () => {
   const { externalClearHighlight, clearGizmo } = useCesiumInteractions(
     viewerRef,
     setSelectedModelInfo,
-    gizmoRef
+    gizmoRef,
+    setSelectedInstanceId,
+    origin
   );
 
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -252,6 +130,13 @@ const SceneEditorStandalone: React.FC = () => {
 
   // Cesium Drag and Drop Hook
   const { message } = AntdApp.useApp();
+  
+  // 用于获取实例树刷新方法的引用
+  const fetchInstanceTreeRef = useRef<(() => void) | undefined>();
+  const setFetchInstanceTree = (fn: () => void) => {
+    fetchInstanceTreeRef.current = fn;
+  };
+  
   const { dragLatLng, handleDragOver, handleDrop, resetDragLatLng } = useCesiumDragAndDrop(
     viewerRef,
     cesiumContainerRef,
@@ -259,7 +144,10 @@ const SceneEditorStandalone: React.FC = () => {
     editorMaterials,
     message,
     refreshLayerStates,
-    publicModels
+    publicModels,
+    sceneId,
+    origin,
+    fetchInstanceTreeRef
   );
 
   const handleCesiumMouseLeave = () => {
@@ -267,7 +155,8 @@ const SceneEditorStandalone: React.FC = () => {
     externalClearHighlight();
   };
 
-  const handleClosePropertiesPanel = useCallback(() => {
+  const clearSelectedModel = useCallback(() => {
+    // 清除选中的模型信息
     setSelectedModelInfo(null);
     clearGizmo();
   }, [clearGizmo]);
@@ -282,6 +171,11 @@ const SceneEditorStandalone: React.FC = () => {
 
   const handlePublicModelDragStart = (e: React.DragEvent, modelId: string) => {
     e.dataTransfer.setData('publicModelId', modelId);
+  };
+
+  // 3DTiles拖拽
+  const handleThreeDTilesDragStart = (e: React.DragEvent, item: any) => {
+    e.dataTransfer.setData('threeDTilesId', item._id);
   };
 
   // 切换图层显示/隐藏
@@ -315,6 +209,12 @@ const SceneEditorStandalone: React.FC = () => {
         独立场景编辑器 {sceneId ? `(ID: ${sceneId})` : ''}
       </Title>
 
+      {/* 使用抽取的加载状态指示器组件 */}
+      <LoadingIndicator 
+        loadingInstances={loadingInstances} 
+        loadingProgress={loadingProgress} 
+      />
+
       {/* Splitter 嵌套布局 */}
       <Splitter layout="vertical" style={{ height: '100vh', width: '100vw' }}>
         <Splitter.Panel style={{ minHeight: 0 }}>
@@ -332,12 +232,33 @@ const SceneEditorStandalone: React.FC = () => {
             {/* 右上：SceneSidebar，仅在 sceneInfo 和 viewerRef 准备好后加载 */}
             <Splitter.Panel defaultSize={400} style={{ minWidth: 0, position: 'relative', height: '100%' }}>
               {sceneInfo && viewerRef.current ? (
-                <SceneSidebar sceneId={sceneId} viewerRef={viewerRef} style={{ width: '100%', height: '100%' }} />
+                <SceneSidebar 
+                  sceneId={sceneId} 
+                  viewerRef={viewerRef} 
+                  style={{ width: '100%', height: '100%' }}
+                  selectedInstanceId={selectedInstanceId}
+                  onInstanceSelect={setSelectedInstanceId}
+                  gizmoRef={gizmoRef}
+                  onModelSelect={setSelectedModelInfo}
+                  setFetchInstanceTree={setFetchInstanceTree}
+                />
               ) : (
                 <Spin spinning={loadingScene} style={{ margin: '100px auto', display: 'block', textAlign: 'center' }}>
                   <div>加载场景数据...</div>
                 </Spin>
               )}
+            </Splitter.Panel>
+            {/* 属性面板 Splitter.Panel，始终显示 */}
+            <Splitter.Panel
+              collapsible
+              defaultSize={320}
+              min={240}
+              max={400}
+              style={{ minWidth: 0, position: 'relative', height: '100%'}}
+            >
+              <SelectedModelPropertiesPanel
+                selectedModelInfo={selectedModelInfo}
+              />
             </Splitter.Panel>
           </Splitter>
         </Splitter.Panel>
@@ -351,6 +272,7 @@ const SceneEditorStandalone: React.FC = () => {
               onModelDragStart={handleModelDragStart}
               onMaterialDragStart={handleMaterialDragStart}
               onPublicModelDragStart={handlePublicModelDragStart}
+              onThreeDTilesDragStart={handleThreeDTilesDragStart}
             />
           </div>
         </Splitter.Panel>
@@ -370,11 +292,6 @@ const SceneEditorStandalone: React.FC = () => {
           经纬度：{dragLatLng.lon.toFixed(6)}, {dragLatLng.lat.toFixed(6)}
         </div>
       )}
-
-      <SelectedModelPropertiesPanel
-        selectedModelInfo={selectedModelInfo}
-        onClose={handleClosePropertiesPanel}
-      />
 
       {/* 左上角菜单按钮 */}
       <MenuOutlined

@@ -22,22 +22,6 @@ class SceneParentRel(StructuredRel):
     created_at = DateTimeProperty(default_now=True)
 
 # ------------------------------------------------------------------------------
-#  基本资源节点
-# ------------------------------------------------------------------------------
-
-class Asset(StructuredNode):
-    """三维模型资源，可在场景中实例化"""
-    uid        = UniqueIdProperty()
-    asset_id   = StringProperty(unique_index=True, required=True)
-    name       = StringProperty()
-    uri        = StringProperty(required=True)            # minio://... 或 s3://...                      # 2×3数组 [minX, minY, minZ, maxX, maxY, maxZ]
-    meta_ref   = StringProperty()                         # Mongo 文档 _id
-    tags       = JSONProperty(default=list)
-
-    # 反向引用：所有实例节点
-    instances  = RelationshipFrom('Instance', 'INSTANCE_OF')
-
-# ------------------------------------------------------------------------------
 #  场景与实例化节点
 # ------------------------------------------------------------------------------
 
@@ -67,8 +51,12 @@ class Scene(StructuredNode):
 class Instance(StructuredNode):
     """场景中的实例化节点，可嵌套"""
     uid        = UniqueIdProperty()
-    instance_id = StringProperty(unique_index=True)
     name       = StringProperty()
+    
+    # 资产信息
+    asset_id   = StringProperty(index=True)                # 资产ID
+    asset_type = StringProperty(default="model")           # 资产类型：model, 3dtiles, gis_layer 等
+
     transform  = JSONProperty(default=lambda: {           # 位置、旋转、缩放的3×3矩阵
         'location': [1,0,0],
         'rotation': [0,0,0],
@@ -78,15 +66,13 @@ class Instance(StructuredNode):
     materials  = JSONProperty(default=list)
 
     # 绑定属性数组
-    iot_binds  = StringProperty()               # Mongo 文档 _id
-    video_binds = StringProperty()              # Mongo 文档 _id
-    file_binds  = StringProperty()              # Mongo 文档 _id
-    gis_layers  = StringProperty()              # Mongo 文档 _id
+    iot_binds  = JSONProperty(default=list)               # Mongo 文档 _id 数组
+    video_binds = JSONProperty(default=list)              # Mongo 文档 _id 数组
+    file_binds  = JSONProperty(default=list)              # Mongo 文档 _id 数组
 
     # 关系
     parent     = RelationshipFrom('Instance', 'PARENT_OF', model=ParentRel)
     children   = RelationshipTo('Instance', 'PARENT_OF', model=ParentRel)
-    asset      = RelationshipTo(Asset, 'INSTANCE_OF', cardinality=One)
 
     # 场景引用
     scenes     = RelationshipFrom(Scene, 'HAS_INSTANCE')
@@ -107,14 +93,23 @@ class ScenePreviewUpdate(BaseModel):
 
 class InstanceCreate(BaseModel):
     name: str
-    asset_id: Optional[str] = None
-    parent_id: Optional[str] = None
+    asset_id: str 
+    asset_type: str = Field(default="model")
+    parent_uid: Optional[str] = None
     transform: Optional[dict] = None
     properties: Optional[dict] = None
     materials: Optional[list] = None
+    iot_binds: Optional[list] = None
+    video_binds: Optional[list] = None
+    file_binds: Optional[list] = None
 
 class InstanceUpdate(BaseModel):
     name: Optional[str] = None
+    asset_id: Optional[str] = None 
+    asset_type: Optional[str] = None
     transform: Optional[dict] = None
     properties: Optional[dict] = None
     materials: Optional[list] = None
+    iot_binds: Optional[list] = None
+    video_binds: Optional[list] = None
+    file_binds: Optional[list] = None

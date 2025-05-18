@@ -9,8 +9,9 @@ import traceback
 import sys
 
 
-from app.routers import auth, files, tasks, attachments, metadata, scene, public_models
+from app.routers import auth, files, tasks, attachments, metadata, scene, public_models , streams
 from app.routers import iot  # 新增
+from app.routers import threedtiles  # 新增3DTiles路由
 from app.models.user import UserRole
 from app.auth.utils import get_password_hash
 from app.core.minio_client import check_and_create_bucket
@@ -49,7 +50,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS设置
+# 配置FastAPI以处理大文件上传 - 禁用默认的大小限制
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],  # 允许前端开发服务器
@@ -69,6 +70,8 @@ app.include_router(metadata.router, prefix="/metadata", tags=["元数据管理"]
 app.include_router(iot.router, prefix="/iot", tags=["iot"])  # 新增
 app.include_router(scene.router, prefix="", tags=["场景管理"])
 app.include_router(public_models.router, prefix="/public-models", tags=["公共模型"])  # 添加公共模型路由
+app.include_router(threedtiles.router, prefix="/3dtiles", tags=["3DTiles模型"])  # 添加3DTiles路由
+app.include_router(streams.router, prefix="/streams", tags=["视频流管理"])  # 新增视频流路由
 
 # MongoDB连接
 client = AsyncIOMotorClient(MONGO_URL)

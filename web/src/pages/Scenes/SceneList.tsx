@@ -51,7 +51,7 @@ const SceneList: React.FC = () => {
 
   // 处理场景点击，进入编辑页面
   const handleSceneClick = (scene: Scene) => {
-    window.open(`/scenes/standalone/${scene.id}`, '_blank');
+    window.open(`/scene-editor/${scene.id}`, '_blank');
   };
 
   // 处理重命名场景

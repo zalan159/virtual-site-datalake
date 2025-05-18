@@ -1,8 +1,10 @@
-import { Table, Button, Space, Typography, Card, Upload, App, message, Progress, Modal } from 'antd';
-import { UploadOutlined, DownloadOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { Table, Button, Space, Typography, Card, Upload, App, message, Progress, Modal, Image } from 'antd';
+import { UploadOutlined, DownloadOutlined, DeleteOutlined, EyeOutlined, FilePdfOutlined, FileTextOutlined, FileUnknownOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
 import type { UploadProps, UploadFile } from 'antd';
 import { attachmentApi, Attachment } from '../../services/attachmentApi';
+import ReactPlayer from 'react-player';
+import DocViewer, { DocViewerRenderers } from '@cyntler/react-doc-viewer';
 
 const { Title } = Typography;
 
@@ -16,6 +18,9 @@ const AttachmentManagement: React.FC = () => {
   const [downloading, setDownloading] = useState<boolean>(false);
   const [downloadModalVisible, setDownloadModalVisible] = useState<boolean>(false);
   const [currentDownloadFile, setCurrentDownloadFile] = useState<string>('');
+  const [previewModalVisible, setPreviewModalVisible] = useState<boolean>(false);
+  const [currentFile, setCurrentFile] = useState<Attachment | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string>('');
 
   const fetchAttachments = async () => {
     try {
@@ -33,6 +38,24 @@ const AttachmentManagement: React.FC = () => {
   useEffect(() => {
     fetchAttachments();
   }, []);
+
+  // 当选择预览文件时，获取下载URL
+  useEffect(() => {
+    const getPreviewUrl = async () => {
+      if (currentFile) {
+        try {
+          const url = await attachmentApi.getDownloadUrl(currentFile._id);
+          setPreviewUrl(url);
+        } catch (error) {
+          messageApi.error('获取预览链接失败');
+        }
+      }
+    };
+
+    if (currentFile) {
+      getPreviewUrl();
+    }
+  }, [currentFile]);
 
   const handleDelete = async (id: string) => {
     try {
@@ -55,6 +78,178 @@ const AttachmentManagement: React.FC = () => {
       messageApi.success('开始下载');
     } catch (error) {
       messageApi.error('下载失败');
+    }
+  };
+
+  const handlePreview = async (record: Attachment) => {
+    try {
+      // 设置当前预览文件
+      setCurrentFile(record);
+      // 打开预览模态框
+      setPreviewModalVisible(true);
+    } catch (error) {
+      messageApi.error('预览文件失败');
+    }
+  };
+
+  // 根据文件扩展名判断文件类型
+  const isImageFile = (extension: string): boolean => {
+    const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'heic', 'heif', 'tif', 'tiff', 'ico', 'raw'];
+    // 去除可能存在的前导点号
+    const ext = extension.toLowerCase().replace(/^\./, '');
+    return imageExtensions.includes(ext);
+  };
+
+  const isPdfFile = (extension: string): boolean => {
+    // 去除可能存在的前导点号
+    const ext = extension.toLowerCase().replace(/^\./, '');
+    return ext === 'pdf';
+  };
+
+  const isTextFile = (extension: string): boolean => {
+    const textExtensions = ['txt', 'md', 'json', 'xml', 'csv', 'html', 'htm'];
+    // 去除可能存在的前导点号
+    const ext = extension.toLowerCase().replace(/^\./, '');
+    return textExtensions.includes(ext);
+  };
+
+  // 判断是否为视频文件
+  const isVideoFile = (extension: string): boolean => {
+    const videoExtensions = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'wmv', 'flv', 'mkv', '3gp'];
+    // 去除可能存在的前导点号
+    const ext = extension.toLowerCase().replace(/^\./, '');
+    return videoExtensions.includes(ext);
+  };
+
+  // 判断是否为Office文档
+  const isOfficeFile = (extension: string): boolean => {
+    const officeExtensions = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp'];
+    // 去除可能存在的前导点号
+    const ext = extension.toLowerCase().replace(/^\./, '');
+    return officeExtensions.includes(ext);
+  };
+
+  // 判断是否为CAD文件
+  const isCadFile = (extension: string): boolean => {
+    const cadExtensions = ['dwg', 'dxf', 'step', 'stp', 'igs', 'iges', 'stl'];
+    // 去除可能存在的前导点号
+    const ext = extension.toLowerCase().replace(/^\./, '');
+    return cadExtensions.includes(ext);
+  };
+
+  // 渲染预览内容
+  const renderPreviewContent = () => {
+    if (!currentFile || !previewUrl) return <div style={{ textAlign: 'center', padding: '40px' }}>加载中...</div>;
+    
+    const { extension, filename } = currentFile;
+    
+    if (isImageFile(extension)) {
+      return (
+        <div className="preview-container" style={{ textAlign: 'center' }}>
+          <Image 
+            src={previewUrl} 
+            alt={filename}
+            style={{ maxWidth: '100%', maxHeight: '70vh' }}
+          />
+        </div>
+      );
+    } else if (isPdfFile(extension)) {
+      return (
+        <div className="preview-container" style={{ textAlign: 'center' }}>
+          <div style={{ padding: '20px' }}>
+            <FilePdfOutlined style={{ fontSize: '64px', color: '#ff4d4f' }} />
+            <p>PDF 文件</p>
+            <iframe
+              src={`${previewUrl}#toolbar=0`}
+              width="100%"
+              height="500px"
+              title={filename}
+              style={{ border: 'none' }}
+            />
+          </div>
+        </div>
+      );
+    } else if (isVideoFile(extension)) {
+      return (
+        <div className="preview-container" style={{ textAlign: 'center' }}>
+          <div style={{ padding: '20px' }}>
+            <h3>{filename}</h3>
+            <ReactPlayer
+              url={previewUrl}
+              controls={true}
+              width="100%"
+              height="500px"
+              config={{
+                file: {
+                  attributes: {
+                    controlsList: 'nodownload',
+                  }
+                }
+              }}
+            />
+          </div>
+        </div>
+      );
+    } else if (isOfficeFile(extension)) {
+      return (
+        <div className="preview-container" style={{ textAlign: 'center' }}>
+          <div style={{ padding: '20px' }}>
+            <h3>{filename}</h3>
+            <DocViewer
+              documents={[{ uri: previewUrl, fileType: extension.replace(/^\./, '') }]}
+              style={{ height: 500 }}
+              prefetchMethod="GET"
+              // config={{
+              //   header: {
+              //     disableHeader: false,
+              //     disableFileName: false,
+              //     retainURLParams: false
+              //   }
+              // }}
+            />
+          </div>
+        </div>
+      );
+    } else if (isCadFile(extension)) {
+      return (
+        <div className="preview-container" style={{ textAlign: 'center' }}>
+          <div style={{ padding: '20px' }}>
+            <h3>{filename}</h3>
+            <p>CAD 文件预览</p>
+            <p>目前暂无CAD预览组件，请下载后使用CAD软件查看</p>
+            <Button type="primary" onClick={() => handleDownload(currentFile._id, filename)}>
+              下载查看
+            </Button>
+          </div>
+        </div>
+      );
+    } else if (isTextFile(extension)) {
+      return (
+        <div className="preview-container" style={{ textAlign: 'center' }}>
+          <div style={{ padding: '20px' }}>
+            <FileTextOutlined style={{ fontSize: '64px', color: '#1890ff' }} />
+            <p>文本文件</p>
+            <p>文件名: {filename}</p>
+            <Button type="primary" onClick={() => handleDownload(currentFile._id, filename)}>
+              下载查看
+            </Button>
+          </div>
+        </div>
+      );
+    } else {
+      return (
+        <div className="preview-container" style={{ textAlign: 'center' }}>
+          <div style={{ padding: '40px 20px' }}>
+            <FileUnknownOutlined style={{ fontSize: '64px', color: '#faad14' }} />
+            <p>该文件类型暂不支持在线预览</p>
+            <p>文件名: {filename}</p>
+            <p>文件类型: {extension}</p>
+            <Button type="primary" onClick={() => handleDownload(currentFile._id, filename)}>
+              下载查看
+            </Button>
+          </div>
+        </div>
+      );
     }
   };
 
@@ -91,7 +286,11 @@ const AttachmentManagement: React.FC = () => {
       key: 'action',
       render: (_: any, record: Attachment) => (
         <Space size="middle">
-          <Button type="link" icon={<EyeOutlined />}>
+          <Button 
+            type="link" 
+            icon={<EyeOutlined />} 
+            onClick={() => handlePreview(record)}
+          >
             查看
           </Button>
           <Button 
@@ -197,6 +396,22 @@ const AttachmentManagement: React.FC = () => {
           <p>正在下载: {currentDownloadFile}</p>
           <Progress percent={downloadProgress} status="active" />
         </div>
+      </Modal>
+
+      {/* 文件预览模态框 */}
+      <Modal
+        title="文件预览"
+        open={previewModalVisible}
+        onCancel={() => {
+          setPreviewModalVisible(false);
+          setCurrentFile(null);
+          setPreviewUrl('');
+        }}
+        footer={null}
+        width={800}
+        centered
+      >
+        {renderPreviewContent()}
       </Modal>
     </div>
   );

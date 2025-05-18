@@ -37,6 +37,7 @@ import SceneEditorStandalone from '../pages/Scenes/SceneEditorStandalone';
 import AdminIndex from '../pages/Admin';
 import PublicModels from '../pages/Admin/PublicModels';
 import UserPublicModels from '../pages/Models/PublicModels';
+import TilesetViewer from '../pages/TilesetViewer';
 
 // 定义路由配置项的类型
 export interface RouteItem {
@@ -119,13 +120,13 @@ export const routeConfig: RouteItem[] = [
       },
       {
         path: '/data/iot',
-        name: 'IoT数据',
+        name: 'IoT数据源',
         icon: <AppstoreOutlined />,
         component: IoTData,
       },
       {
         path: '/data/mqtt-subscriptions',
-        name: 'MQTT订阅',
+        name: 'IoT数据订阅',
         icon: <ApiOutlined />,
         component: UserSubscriptions,
       },
@@ -155,12 +156,12 @@ export const routeConfig: RouteItem[] = [
       },
     ],
   },
-  {
-    path: '/agent',
-    name: '智能体',
-    icon: <RobotOutlined />,
-    component: AgentPage,
-  },
+  // {
+  //   path: '/agent',
+  //   name: '智能体',
+  //   icon: <RobotOutlined />,
+  //   component: AgentPage,
+  // },
   {
     path: '/settings',
     name: '用户设置',
@@ -200,8 +201,12 @@ export const specialRoutes = [
     component: ModelPreviewStandalone,
   },
   {
-    path: '/scenes/standalone/:sceneId',
+    path: '/scene-editor/:sceneId',
     component: SceneEditorStandalone,
+  },
+  {
+    path: '/tileset-viewer',
+    component: TilesetViewer,
   },
 ];
 

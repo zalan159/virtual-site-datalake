@@ -6,6 +6,7 @@ import { ModelAsset } from '../hooks/useModelAssets';
 import { MaterialDefinition } from '../hooks/useCesiumDragAndDrop';
 import { PublicModelMetadata } from '../services/publicModels';
 import { usePublicModelAssets } from '../hooks/usePublicModelAssets';
+import { ThreeDTilesTab } from './ThreeDTilesTab';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -264,26 +265,26 @@ const PublicModelTab: React.FC<PublicModelTabProps> = ({
 };
 
 // 材质标签页组件
-interface MaterialTabProps {
-  materials: MaterialDefinition[];
-  onMaterialDragStart: (e: React.DragEvent, materialId: string) => void;
-}
+// interface MaterialTabProps {
+//   materials: MaterialDefinition[];
+//   onMaterialDragStart: (e: React.DragEvent, materialId: string) => void;
+// }
 
-const MaterialTab: React.FC<MaterialTabProps> = ({ materials, onMaterialDragStart }) => {
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, padding: '16px 0' }}>
-      {materials.map(mat => (
-        <AssetCard
-          key={mat.id}
-          id={mat.id}
-          name={mat.name}
-          icon={mat.icon}
-          onDragStart={onMaterialDragStart}
-        />
-      ))}
-    </div>
-  );
-};
+// const MaterialTab: React.FC<MaterialTabProps> = ({ materials, onMaterialDragStart }) => {
+//   return (
+//     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, padding: '16px 0' }}>
+//       {materials.map(mat => (
+//         <AssetCard
+//           key={mat.id}
+//           id={mat.id}
+//           name={mat.name}
+//           icon={mat.icon}
+//           onDragStart={onMaterialDragStart}
+//         />
+//       ))}
+//     </div>
+//   );
+// };
 
 // 主AssetTabs组件
 interface AssetTabsProps {
@@ -293,6 +294,7 @@ interface AssetTabsProps {
   onModelDragStart: (e: React.DragEvent, modelId: string) => void;
   onMaterialDragStart: (e: React.DragEvent, materialId: string) => void;
   onPublicModelDragStart?: (e: React.DragEvent, modelId: string) => void;
+  onThreeDTilesDragStart?: (e: React.DragEvent, item: any) => void;
 }
 
 export const AssetTabs: React.FC<AssetTabsProps> = ({
@@ -302,6 +304,7 @@ export const AssetTabs: React.FC<AssetTabsProps> = ({
   onModelDragStart,
   onMaterialDragStart,
   onPublicModelDragStart,
+  onThreeDTilesDragStart,
 }) => {
   // 公共模型过滤条件
   const [publicModelOptions, setPublicModelOptions] = useState({
@@ -385,13 +388,23 @@ export const AssetTabs: React.FC<AssetTabsProps> = ({
       ),
     },
     {
+      key: 'threedtiles',
+      label: '3DTiles',
+      children: (
+        <ThreeDTilesTab onThreeDTilesDragStart={onThreeDTilesDragStart} />
+      ),
+    },
+    {
       key: 'materials',
       label: '材质',
       children: (
-        <MaterialTab 
-          materials={materials}
-          onMaterialDragStart={onMaterialDragStart}
-        />
+        // <MaterialTab 
+        //   materials={materials}
+        //   onMaterialDragStart={onMaterialDragStart}
+        // />
+        <div style={{width: '100%', height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 16}}>
+          材质功能正在开发中
+        </div>
       ),
     }
   ];

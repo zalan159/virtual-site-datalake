@@ -1,39 +1,134 @@
 // components/SelectedModelPropertiesPanel.tsx
-import React from 'react';
-import { Button, Card } from 'antd'; // 使用 Card 组件美化
+import React, { useEffect, useState } from 'react';
+import { Empty, Spin, Tabs, App as AntdApp, Card } from 'antd';
 import { SelectedModelInfo } from '../hooks/useCesiumInteractions';
+import DynamicPropertyForm from './DynamicPropertyForm';
+import { getInstanceProperties, updateInstanceProperties } from '../services/sceneApi';
+import { message } from 'antd';
 
 interface SelectedModelPropertiesPanelProps {
   selectedModelInfo: SelectedModelInfo | null;
-  onClose: () => void;
 }
 
 export const SelectedModelPropertiesPanel: React.FC<SelectedModelPropertiesPanelProps> = ({
-  selectedModelInfo,
-  onClose,
+  selectedModelInfo
 }) => {
-  if (!selectedModelInfo) return null;
+  const [loading, setLoading] = useState(false);
+  const [propertiesData, setPropertiesData] = useState<any>(null);
+  const [metadata, setMetadata] = useState<any>(null);
+  const { message } = AntdApp.useApp();
+
+  // 当选中模型变化时，加载模型属性
+  useEffect(() => {
+    if (selectedModelInfo?.id) {
+      loadModelProperties(selectedModelInfo.id);
+      // 打印metadata和propertiesData
+
+    } else {
+      setPropertiesData(null);
+      setMetadata(null);
+    }
+  }, [selectedModelInfo]);
+
+  // 加载模型属性
+  const loadModelProperties = async (instanceId: string) => {
+    setLoading(true);
+    try {
+      const response = await getInstanceProperties(instanceId);
+      setPropertiesData(response.data.data);
+      setMetadata(response.data.metadata);
+      // 打印metadata和propertiesData
+      console.log("metadata:", metadata);
+      console.log("propertiesData:", propertiesData);
+    } catch (error) {
+      console.error('获取模型属性失败:', error);
+      message.error('获取模型属性失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 保存模型属性
+  const handleSave = async (values: any) => {
+    if (!selectedModelInfo?.id) return;
+    
+    try {
+      // 分别处理不同分组的属性更新
+      // 注意：资产属性不可编辑，所以不处理
+      
+      // 更新实例属性
+      if (values.instance) {
+        await updateInstanceProperties(selectedModelInfo.id, values.instance);
+      }
+      
+      // 更新绑定关系
+      if (values.bindings) {
+        await updateInstanceProperties(selectedModelInfo.id, values.bindings);
+      }
+      
+      message.success('属性已更新');
+      // 刷新属性
+      loadModelProperties(selectedModelInfo.id);
+    } catch (error) {
+      console.error('更新属性失败:', error);
+      message.error('更新属性失败');
+    }
+  };
+
+  // Tab内容渲染
+  const renderTabContent = () => {
+    if (!selectedModelInfo) {
+      return <Empty description="请选择一个模型以查看其属性" />;
+    }
+
+    if (loading) {
+      return <Spin tip="加载中..." />;
+    }
+
+    if (propertiesData && metadata) {
+      // 打印metadata和propertiesData
+      console.log("渲染表单前 metadata:", metadata);
+      console.log("渲染表单前 propertiesData:", propertiesData);
+      return (
+        <DynamicPropertyForm
+          entityId={selectedModelInfo.id}
+          data={propertiesData}
+          metadata={metadata}
+          onSave={handleSave}
+          onRefresh={() => loadModelProperties(selectedModelInfo.id)}
+          sectionTitle="模型属性"
+          // isGrouped={true}
+        />
+      );
+    }
+
+    return <Empty description="未能加载模型属性" />;
+  };
 
   return (
     <Card
-        title="模型属性"
-        size="small"
-        style={{
-            position: 'absolute',
-            right: 24,
-            top: 70, // 调整位置避免与标题重叠
-            zIndex: 100,
-            width: 280, // 固定宽度
-            background: '#fff',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
-        }}
-        extra={<Button type="link" size="small" onClick={onClose}>关闭</Button>}
+      style={{
+        width: '100%',
+        height: '100%',
+        overflow: 'auto',
+        padding: 0,
+        borderRadius: 0,
+      }}
+      styles={{
+        body: { padding: '16px 0', height: '100%', overflow: 'auto' }
+      }}
     >
-      <p><strong>ID:</strong> {selectedModelInfo.id || '无'}</p>
-      <p><strong>名称:</strong> {selectedModelInfo.name || '无'}</p>
-      {/* 可以在这里添加更多属性，例如从 selectedModelInfo.primitive 中读取 */}
-      {/* 例如：<p><strong>位置:</strong> {selectedModelInfo.primitive.modelMatrix ? '查看控制台' : 'N/A'}</p> */}
-      {/* selectedModelInfo.primitive.modelMatrix 是一个 Matrix4，需要转换成可读格式 */}
+      <Tabs 
+        style={{ width: '100%', height: '100%', overflow: 'auto' }}
+        tabBarStyle={{ margin: 0 }}
+        items={[
+          {
+            key: 'properties',
+            label: '模型属性',
+            children: renderTabContent(),
+          }
+        ]}
+      />
     </Card>
   );
 };

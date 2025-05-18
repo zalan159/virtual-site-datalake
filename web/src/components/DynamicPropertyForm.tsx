@@ -6,6 +6,7 @@ import moment from 'moment';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
+const { Panel } = Collapse;
 
 // 定义字段元数据类型
 export interface FieldMetadata {
@@ -21,12 +22,22 @@ export interface FieldMetadata {
   description?: string;
 }
 
+// 新增分组接口定义
+export interface MetadataGroup {
+  id: string;
+  name: string;
+  fields: string[];
+}
+
 // 定义组件属性
 export interface DynamicPropertyFormProps {
   entityId: string; // 实体ID (可能是sceneId, instanceId等)
   data: any;        // 实体数据
   metadata: {       // 字段元数据
-    [key: string]: FieldMetadata;
+    groups?: MetadataGroup[];  // 新增分组信息
+    fields: {
+      [key: string]: FieldMetadata;
+    }
   };
   loading?: boolean;
   onSave?: (values: any) => Promise<void>; // 新增，保存时回调
@@ -34,6 +45,9 @@ export interface DynamicPropertyFormProps {
   sectionTitle?: string;
   onFlyToOrigin?: (origin: {longitude: number, latitude: number, height: number}) => void; // 新增
   onUpdatePreviewImage?: () => Promise<void>; // 修改为无参数
+  startPickOrigin?: () => void; // 新增
+  isPickingOrigin?: boolean; // 新增
+  pickedOrigin?: {longitude: number, latitude: number, height: number} | null; // 新增
 }
 
 const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
@@ -45,8 +59,15 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
   onRefresh,
   sectionTitle = '属性',
   onFlyToOrigin,
-  onUpdatePreviewImage
+  onUpdatePreviewImage,
+  startPickOrigin,
+  isPickingOrigin,
+  pickedOrigin
 }) => {
+  // 添加console.log来打印data和metadata
+  console.log('DynamicPropertyForm data:', data);
+  console.log('DynamicPropertyForm metadata:', metadata);
+
   const [form] = Form.useForm();
   const [formValues, setFormValues] = useState<any>(data || {});
   const [saving, setSaving] = useState(false);
@@ -76,16 +97,16 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
   };
 
   // 处理上传文件
-  const handleFileUpload = async (file: UploadFile, fieldName: string) => {
+  const handleFileUpload = async (file: UploadFile, fieldName: string): Promise<string> => {
     // 模拟文件上传过程，实际应该调用文件上传接口
     const fakeUrl = 'https://example.com/fake-image-url.jpg';
     handleFieldChange(fieldName, fakeUrl);
-    return false; // 阻止默认上传行为
+    return fakeUrl; // 返回URL以便分组模式下使用
   };
 
   // 根据字段类型渲染不同的表单组件
   const renderFormItem = (fieldName: string) => {
-    const meta = metadata[fieldName];
+    const meta = metadata.fields ? metadata.fields[fieldName] : (metadata as any)[fieldName];
     if (!meta) return null;
 
     const value = formValues[fieldName];
@@ -345,6 +366,28 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
     return (
       <Form.Item label={meta.display_name} key={fieldName}>
         <Row gutter={[16, 16]}>
+          <Col span={24} style={{ textAlign: 'right', marginBottom: 8 }}>
+            {typeof originValue.longitude === 'number' && typeof originValue.latitude === 'number' && onFlyToOrigin && (
+              <Button
+                size="small"
+                type="default"
+                onClick={() => onFlyToOrigin!(originValue)}
+                style={{ marginRight: 8 }}
+              >
+                飞到原点
+              </Button>
+            )}
+            {startPickOrigin && (
+              <Button
+                size="small"
+                type="primary"
+                onClick={startPickOrigin}
+                loading={isPickingOrigin}
+              >
+                {isPickingOrigin ? '正在选点...' : '地图选点'}
+              </Button>
+            )}
+          </Col>
           <Col span={24}>
             <Form.Item label="经度" style={{ marginBottom: 8 }}>
               <InputNumber
@@ -353,7 +396,7 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
                 max={meta.properties?.longitude?.max || 180}
                 step={0.000001}
                 style={{ width: '100%' }}
-                onChange={(value) => handleOriginChange('longitude', value as number)}
+                onChange={(val) => handleOriginChange('longitude', val as number)}
               />
             </Form.Item>
           </Col>
@@ -365,7 +408,7 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
                 max={meta.properties?.latitude?.max || 90}
                 step={0.000001}
                 style={{ width: '100%' }}
-                onChange={(value) => handleOriginChange('latitude', value as number)}
+                onChange={(val) => handleOriginChange('latitude', val as number)}
               />
             </Form.Item>
           </Col>
@@ -377,21 +420,9 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
                 max={meta.properties?.height?.max || 10000}
                 step={0.01}
                 style={{ width: '100%' }}
-                onChange={(value) => handleOriginChange('height', value as number)}
+                onChange={(val) => handleOriginChange('height', val as number)}
               />
             </Form.Item>
-          </Col>
-          <Col span={24} style={{ textAlign: 'right' }}>
-            {typeof originValue.longitude === 'number' && typeof originValue.latitude === 'number' && onFlyToOrigin && (
-              <Button
-                size="small"
-                type="default"
-                onClick={() => onFlyToOrigin!(originValue)}
-                style={{ marginTop: 8 }}
-              >
-                飞到原点
-              </Button>
-            )}
           </Col>
         </Row>
       </Form.Item>
@@ -579,15 +610,12 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
   };
 
   return (
-    <Collapse
-      defaultActiveKey={['1']}
-      style={{ marginBottom: 16 }}
-      items={[
-        {
-          key: '1',
-          label: sectionTitle,
-          children: (
-            <Spin spinning={loading || saving}>
+    <Spin spinning={loading || saving}>
+      {metadata?.groups ? (
+        // 新的分组渲染逻辑 - 每个分组一个折叠面板
+        <Collapse defaultActiveKey={['0']} style={{ marginBottom: 16 }}>
+          {metadata.groups.map((group, index) => (
+            <Panel header={group.name} key={index.toString()}>
               <Form
                 form={form}
                 layout="horizontal"
@@ -595,18 +623,559 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
                 wrapperCol={{ span: 18 }}
                 initialValues={formValues}
               >
-                {formValues && metadata && Object.keys(metadata).map(fieldName => renderFormItem(fieldName))}
+                {group.fields.map(fieldName => {
+                  // 获取正确的字段值
+                  let value;
+                  
+                  // 优先尝试从数据中获取分组下的值
+                  if (formValues && formValues[group.id] && fieldName in formValues[group.id]) {
+                    value = formValues[group.id][fieldName];
+                  } 
+                  // 如果分组中没有，则尝试从根级别获取（兼容旧数据结构）
+                  else if (formValues && fieldName in formValues) {
+                    value = formValues[fieldName];
+                  }
+                  
+                  // 打印当前字段信息，便于调试
+                  console.log(`字段 ${fieldName}，分组 ${group.id}，值:`, value);
+                  
+                  // 获取元数据
+                  const meta = metadata.fields[fieldName];
+                  if (!meta) return null;
+                  
+                  // 构建表单项属性
+                  const itemProps = {
+                    label: (
+                      <span>
+                        {meta.display_name}
+                        {meta.description && (
+                          <span style={{ fontSize: '12px', color: '#888', marginLeft: '8px' }}>
+                            ({meta.description})
+                          </span>
+                        )}
+                      </span>
+                    ),
+                    name: fieldName,
+                  };
+
+                  // 如果字段不可编辑，显示只读内容
+                  if (!meta.editable) {
+                    return (
+                      <Form.Item key={fieldName} {...itemProps}>
+                        {renderReadOnlyValue(fieldName, value, meta)}
+                      </Form.Item>
+                    );
+                  }
+
+                  // 根据类型渲染可编辑表单控件
+                  switch (meta.type) {
+                    case 'string':
+                      return (
+                        <Form.Item key={fieldName} {...itemProps}>
+                          <Input
+                            value={value}
+                            placeholder={`请输入${meta.display_name}`}
+                            onChange={(e) => {
+                              // 对于分组数据，需要更新到正确的路径
+                              if (group.id) {
+                                const groupData = { ...(formValues[group.id] || {}) };
+                                groupData[fieldName] = e.target.value;
+                                handleFieldChange(group.id, groupData);
+                              } else {
+                                handleFieldChange(fieldName, e.target.value);
+                              }
+                            }}
+                          />
+                        </Form.Item>
+                      );
+                    case 'text':
+                      return (
+                        <Form.Item key={fieldName} {...itemProps}>
+                          <TextArea
+                            rows={4}
+                            value={value}
+                            placeholder={`请输入${meta.display_name}`}
+                            onChange={(e) => {
+                              if (group.id) {
+                                const groupData = { ...(formValues[group.id] || {}) };
+                                groupData[fieldName] = e.target.value;
+                                handleFieldChange(group.id, groupData);
+                              } else {
+                                handleFieldChange(fieldName, e.target.value);
+                              }
+                            }}
+                          />
+                        </Form.Item>
+                      );
+                    case 'number':
+                      return (
+                        <Form.Item key={fieldName} {...itemProps}>
+                          <InputNumber
+                            style={{ width: '100%' }}
+                            min={meta.min}
+                            max={meta.max}
+                            value={value}
+                            onChange={(val) => {
+                              if (group.id) {
+                                const groupData = { ...(formValues[group.id] || {}) };
+                                groupData[fieldName] = val;
+                                handleFieldChange(group.id, groupData);
+                              } else {
+                                handleFieldChange(fieldName, val);
+                              }
+                            }}
+                          />
+                        </Form.Item>
+                      );
+                    case 'boolean':
+                      return (
+                        <Form.Item key={fieldName} {...itemProps} valuePropName="checked">
+                          <Switch
+                            checked={!!value}
+                            onChange={(checked) => {
+                              if (group.id) {
+                                const groupData = { ...(formValues[group.id] || {}) };
+                                groupData[fieldName] = checked;
+                                handleFieldChange(group.id, groupData);
+                              } else {
+                                handleFieldChange(fieldName, checked);
+                              }
+                            }}
+                          />
+                        </Form.Item>
+                      );
+                    case 'datetime':
+                      return (
+                        <Form.Item key={fieldName} {...itemProps}>
+                          <DatePicker
+                            style={{ width: '100%' }}
+                            showTime
+                            value={value ? moment(value) : undefined}
+                            onChange={(date) => {
+                              const isoString = date ? date.toISOString() : null;
+                              if (group.id) {
+                                const groupData = { ...(formValues[group.id] || {}) };
+                                groupData[fieldName] = isoString;
+                                handleFieldChange(group.id, groupData);
+                              } else {
+                                handleFieldChange(fieldName, isoString);
+                              }
+                            }}
+                          />
+                        </Form.Item>
+                      );
+                    case 'image':
+                      // 处理图片字段
+                      if (fieldName === 'preview_image' && typeof onUpdatePreviewImage === 'function') {
+                        return (
+                          <Form.Item key={fieldName} {...itemProps}>
+                            <div
+                              style={{ position: 'relative', display: 'inline-block' }}
+                              onMouseEnter={() => setFormValues((prev: any) => ({ ...prev, [`${fieldName}_hover`]: true }))}
+                              onMouseLeave={() => setFormValues((prev: any) => ({ ...prev, [`${fieldName}_hover`]: false }))}
+                            >
+                              <Image
+                                src={value || '/logoonly.png'}
+                                width={200}
+                                style={{ marginBottom: 8 }}
+                                fallback="/logoonly.png"
+                                preview={true}
+                              />
+                              {formValues[`${fieldName}_hover`] && (
+                                <div style={{
+                                  position: 'absolute',
+                                  top: 8,
+                                  left: 8,
+                                  background: 'rgba(0,0,0,0.5)',
+                                  color: '#fff',
+                                  borderRadius: 4,
+                                  padding: '2px 8px',
+                                  zIndex: 10,
+                                  display: 'flex',
+                                  gap: 8
+                                }}>
+                                  <Button
+                                    size="small"
+                                    type="primary"
+                                    icon={<UploadOutlined />}
+                                    onClick={() => onUpdatePreviewImage()}
+                                  >
+                                    更新
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          </Form.Item>
+                        );
+                      } else {
+                        return (
+                          <Form.Item key={fieldName} {...itemProps}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                              <Image 
+                                src={value || '/logoonly.png'} 
+                                width={200} 
+                                style={{ marginBottom: 8 }} 
+                                fallback="/logoonly.png"
+                              />
+                              <Upload
+                                beforeUpload={(file) => {
+                                  handleFileUpload(file, fieldName).then((url) => {
+                                    if (group.id) {
+                                      const groupData = { ...(formValues[group.id] || {}) };
+                                      groupData[fieldName] = url;
+                                      handleFieldChange(group.id, groupData);
+                                    } else {
+                                      handleFieldChange(fieldName, url);
+                                    }
+                                  });
+                                  return false;
+                                }}
+                                showUploadList={false}
+                              >
+                                <Button icon={<UploadOutlined />}>
+                                  {value ? '更换图片' : '上传图片'}
+                                </Button>
+                              </Upload>
+                            </div>
+                          </Form.Item>
+                        );
+                      }
+                    case 'object':
+                      if (fieldName === 'origin') {
+                        // 特殊处理原点字段
+                        const originValue = value || { longitude: 0, latitude: 0, height: 0 };
+                        return (
+                          <Form.Item label={meta.display_name} key={fieldName}>
+                            <Row gutter={[16, 16]}>
+                              <Col span={24} style={{ textAlign: 'right', marginBottom: 8 }}>
+                                {typeof originValue.longitude === 'number' && typeof originValue.latitude === 'number' && onFlyToOrigin && (
+                                  <Button
+                                    size="small"
+                                    type="default"
+                                    onClick={() => onFlyToOrigin!(originValue)}
+                                    style={{ marginRight: 8 }}
+                                  >
+                                    飞到原点
+                                  </Button>
+                                )}
+                                {startPickOrigin && (
+                                  <Button
+                                    size="small"
+                                    type="primary"
+                                    onClick={startPickOrigin}
+                                    loading={isPickingOrigin}
+                                  >
+                                    {isPickingOrigin ? '正在选点...' : '地图选点'}
+                                  </Button>
+                                )}
+                              </Col>
+                              <Col span={24}>
+                                <Form.Item label="经度" style={{ marginBottom: 8 }}>
+                                  <InputNumber
+                                    value={originValue.longitude}
+                                    min={meta.properties?.longitude?.min || -180}
+                                    max={meta.properties?.longitude?.max || 180}
+                                    step={0.000001}
+                                    style={{ width: '100%' }}
+                                    onChange={(val) => {
+                                      const newOrigin = { ...originValue, longitude: val as number };
+                                      handleFieldChange(fieldName, newOrigin);
+                                    }}
+                                  />
+                                </Form.Item>
+                              </Col>
+                              <Col span={24}>
+                                <Form.Item label="纬度" style={{ marginBottom: 8 }}>
+                                  <InputNumber
+                                    value={originValue.latitude}
+                                    min={meta.properties?.latitude?.min || -90}
+                                    max={meta.properties?.latitude?.max || 90}
+                                    step={0.000001}
+                                    style={{ width: '100%' }}
+                                    onChange={(val) => {
+                                      const newOrigin = { ...originValue, latitude: val as number };
+                                      handleFieldChange(fieldName, newOrigin);
+                                    }}
+                                  />
+                                </Form.Item>
+                              </Col>
+                              <Col span={24}>
+                                <Form.Item label="高程" style={{ marginBottom: 0 }}>
+                                  <InputNumber
+                                    value={originValue.height}
+                                    min={meta.properties?.height?.min || -10000}
+                                    max={meta.properties?.height?.max || 10000}
+                                    step={0.01}
+                                    style={{ width: '100%' }}
+                                    onChange={(val) => {
+                                      const newOrigin = { ...originValue, height: val as number };
+                                      handleFieldChange(fieldName, newOrigin);
+                                    }}
+                                  />
+                                </Form.Item>
+                              </Col>
+                            </Row>
+                          </Form.Item>
+                        );
+                      } else if (fieldName === 'transform') {
+                        // 特殊处理变换字段
+                        const transformValue = value || {
+                          location: [0, 0, 0],
+                          rotation: [0, 0, 0],
+                          scale: [1, 1, 1]
+                        };
+                        
+                        return (
+                          <Form.Item label={meta.display_name} key={fieldName}>
+                            <Row gutter={[16, 16]}>
+                              {/* 位置 */}
+                              <Col span={24}>
+                                <Form.Item label="位置" style={{ marginBottom: 8 }}>
+                                  <Row gutter={8}>
+                                    {[0, 1, 2].map((idx) => (
+                                      <Col span={8} key={`loc-${idx}`}>
+                                        <InputNumber
+                                          value={transformValue.location?.[idx]}
+                                          style={{ width: '100%' }}
+                                          onChange={(val) => {
+                                            const newArray = [...(transformValue.location || [])];
+                                            newArray[idx] = val as number;
+                                            const newTransform = { ...transformValue, location: newArray };
+                                            
+                                            if (group.id) {
+                                              const groupData = { ...(formValues[group.id] || {}) };
+                                              groupData[fieldName] = newTransform;
+                                              handleFieldChange(group.id, groupData);
+                                            } else {
+                                              handleFieldChange(fieldName, newTransform);
+                                            }
+                                          }}
+                                        />
+                                      </Col>
+                                    ))}
+                                  </Row>
+                                </Form.Item>
+                              </Col>
+                              {/* 旋转 */}
+                              <Col span={24}>
+                                <Form.Item label="旋转" style={{ marginBottom: 8 }}>
+                                  <Row gutter={8}>
+                                    {[0, 1, 2].map((idx) => (
+                                      <Col span={8} key={`rot-${idx}`}>
+                                        <InputNumber
+                                          value={transformValue.rotation?.[idx]}
+                                          style={{ width: '100%' }}
+                                          onChange={(val) => {
+                                            const newArray = [...(transformValue.rotation || [])];
+                                            newArray[idx] = val as number;
+                                            const newTransform = { ...transformValue, rotation: newArray };
+                                            
+                                            if (group.id) {
+                                              const groupData = { ...(formValues[group.id] || {}) };
+                                              groupData[fieldName] = newTransform;
+                                              handleFieldChange(group.id, groupData);
+                                            } else {
+                                              handleFieldChange(fieldName, newTransform);
+                                            }
+                                          }}
+                                        />
+                                      </Col>
+                                    ))}
+                                  </Row>
+                                </Form.Item>
+                              </Col>
+                              {/* 缩放 */}
+                              <Col span={24}>
+                                <Form.Item label="缩放" style={{ marginBottom: 0 }}>
+                                  <Row gutter={8}>
+                                    {[0, 1, 2].map((idx) => (
+                                      <Col span={8} key={`scale-${idx}`}>
+                                        <InputNumber
+                                          value={transformValue.scale?.[idx]}
+                                          style={{ width: '100%' }}
+                                          onChange={(val) => {
+                                            const newArray = [...(transformValue.scale || [])];
+                                            newArray[idx] = val as number;
+                                            const newTransform = { ...transformValue, scale: newArray };
+                                            
+                                            if (group.id) {
+                                              const groupData = { ...(formValues[group.id] || {}) };
+                                              groupData[fieldName] = newTransform;
+                                              handleFieldChange(group.id, groupData);
+                                            } else {
+                                              handleFieldChange(fieldName, newTransform);
+                                            }
+                                          }}
+                                        />
+                                      </Col>
+                                    ))}
+                                  </Row>
+                                </Form.Item>
+                              </Col>
+                            </Row>
+                          </Form.Item>
+                        );
+                      } else {
+                        // 通用对象渲染
+                        return (
+                          <Form.Item label={meta.display_name} key={fieldName}>
+                            <TextArea
+                              rows={4}
+                              value={value ? JSON.stringify(value, null, 2) : ''}
+                              onChange={(e) => {
+                                try {
+                                  const newValue = JSON.parse(e.target.value);
+                                  if (group.id) {
+                                    const groupData = { ...(formValues[group.id] || {}) };
+                                    groupData[fieldName] = newValue;
+                                    handleFieldChange(group.id, groupData);
+                                  } else {
+                                    handleFieldChange(fieldName, newValue);
+                                  }
+                                } catch (error) {
+                                  // 解析错误时不更新
+                                  console.error('JSON解析错误:', error);
+                                }
+                              }}
+                            />
+                          </Form.Item>
+                        );
+                      }
+                    case 'array':
+                      // 数组类型处理
+                      const arrayValue = value || [];
+                      return (
+                        <Form.Item label={meta.display_name} key={fieldName}>
+                          <Form.List name={fieldName} initialValue={arrayValue}>
+                            {(fields, { add, remove }) => (
+                              <>
+                                {fields.map((field, index) => (
+                                  <Space key={field.key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
+                                    <Form.Item
+                                      {...field}
+                                      style={{ marginBottom: 0 }}
+                                    >
+                                      <Input
+                                        value={arrayValue[index]}
+                                        onChange={(e) => {
+                                          const newArray = [...arrayValue];
+                                          newArray[index] = e.target.value;
+                                          
+                                          if (group.id) {
+                                            const groupData = { ...(formValues[group.id] || {}) };
+                                            groupData[fieldName] = newArray;
+                                            handleFieldChange(group.id, groupData);
+                                          } else {
+                                            handleFieldChange(fieldName, newArray);
+                                          }
+                                        }}
+                                      />
+                                    </Form.Item>
+                                    <MinusCircleOutlined
+                                      onClick={() => {
+                                        remove(field.name);
+                                        const newArray = [...arrayValue];
+                                        newArray.splice(index, 1);
+                                        
+                                        if (group.id) {
+                                          const groupData = { ...(formValues[group.id] || {}) };
+                                          groupData[fieldName] = newArray;
+                                          handleFieldChange(group.id, groupData);
+                                        } else {
+                                          handleFieldChange(fieldName, newArray);
+                                        }
+                                      }}
+                                    />
+                                  </Space>
+                                ))}
+                                <Form.Item>
+                                  <Button
+                                    type="dashed"
+                                    onClick={() => {
+                                      add();
+                                      const newArray = [...arrayValue, ''];
+                                      
+                                      if (group.id) {
+                                        const groupData = { ...(formValues[group.id] || {}) };
+                                        groupData[fieldName] = newArray;
+                                        handleFieldChange(group.id, groupData);
+                                      } else {
+                                        handleFieldChange(fieldName, newArray);
+                                      }
+                                    }}
+                                    block
+                                    icon={<PlusOutlined />}
+                                  >
+                                    添加项
+                                  </Button>
+                                </Form.Item>
+                              </>
+                            )}
+                          </Form.List>
+                        </Form.Item>
+                      );
+                    default:
+                      // 对于其他类型，先简单返回一个输入框
+                      return (
+                        <Form.Item key={fieldName} {...itemProps}>
+                          <Input
+                            value={value}
+                            placeholder={`请输入${meta.display_name}`}
+                            onChange={(e) => {
+                              if (group.id) {
+                                const groupData = { ...(formValues[group.id] || {}) };
+                                groupData[fieldName] = e.target.value;
+                                handleFieldChange(group.id, groupData);
+                              } else {
+                                handleFieldChange(fieldName, e.target.value);
+                              }
+                            }}
+                          />
+                        </Form.Item>
+                      );
+                  }
+                })}
               </Form>
-              <div style={{ textAlign: 'right', marginTop: 16 }}>
-                <Button type="primary" onClick={handleSave} loading={saving} disabled={loading}>
-                  保存
-                </Button>
-              </div>
-            </Spin>
-          )
-        }
-      ]}
-    />
+            </Panel>
+          ))}
+          <div style={{ textAlign: 'right', marginTop: 16 }}>
+            <Button type="primary" onClick={handleSave} loading={saving} disabled={loading}>
+              保存
+            </Button>
+          </div>
+        </Collapse>
+      ) : (
+        // 旧的非分组渲染逻辑，使用单一折叠面板
+        <Collapse
+          defaultActiveKey={['1']}
+          style={{ marginBottom: 16 }}
+          items={[
+            {
+              key: '1',
+              label: sectionTitle,
+              children: (
+                <>
+                  <Form
+                    form={form}
+                    layout="horizontal"
+                    labelCol={{ span: 6 }}
+                    wrapperCol={{ span: 18 }}
+                    initialValues={formValues}
+                  >
+                    {formValues && metadata && Object.keys(metadata.fields || metadata).map(fieldName => renderFormItem(fieldName))}
+                  </Form>
+                  <div style={{ textAlign: 'right', marginTop: 16 }}>
+                    <Button type="primary" onClick={handleSave} loading={saving} disabled={loading}>
+                      保存
+                    </Button>
+                  </div>
+                </>
+              )
+            }
+          ]}
+        />
+      )}
+    </Spin>
   );
 };
 

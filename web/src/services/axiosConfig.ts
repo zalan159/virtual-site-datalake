@@ -3,8 +3,10 @@ import axios from 'axios';
 // 创建axios实例
 const api = axios.create({
   baseURL: '/api',
-  timeout: 300000,
+  timeout: 0, // 0表示无超时限制，适合大文件上传
   withCredentials: true, // 允许跨域请求携带凭证
+  maxContentLength: Infinity, // 允许的最大内容长度
+  maxBodyLength: Infinity, // 允许的最大请求体长度
 });
 
 // 请求拦截器

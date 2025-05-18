@@ -35,6 +35,13 @@ async def init_mongodb_indexes():
         await db.public_models.create_index([("category", 1), ("tags", 1)])  # 分类+标签复合索引
         await db.public_models.create_index("filename", unique=False)  # 文件名索引
         
+        # 为3DTiles模型集合创建索引
+        await db.threedtiles.create_index("name")  # 名称索引
+        await db.threedtiles.create_index("tags")  # 标签索引
+        await db.threedtiles.create_index("is_public")  # 公开状态索引
+        await db.threedtiles.create_index("created_at")  # 创建时间索引
+        await db.threedtiles.create_index([("name", "text"), ("description", "text")])  # 全文索引
+        
         print("MongoDB索引初始化成功")
         
     except Exception as e:
