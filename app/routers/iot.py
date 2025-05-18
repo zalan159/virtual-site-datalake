@@ -3,9 +3,9 @@ from fastapi import APIRouter, HTTPException, Query, Depends, Header, Body
 from typing import List, Optional, Dict, Any
 from motor.motor_asyncio import AsyncIOMotorClient
 from app.models.iot import BrokerConfig, TopicSubscription, UserTopicSubscription
-from app.utils.mongo_init import get_mongo_url
 from app.auth.utils import get_current_active_user
-from app.models.user import UserInDB
+from app.models.user import UserInDB, PyObjectId
+from bson import ObjectId
 import os
 import redis.asyncio as aioredis
 import json
@@ -13,6 +13,8 @@ from fastapi.responses import JSONResponse
 from datetime import datetime
 import time
 import logging
+
+from app.utils.mongo_init import get_mongo_url
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -34,81 +36,112 @@ router = APIRouter(tags=["iot"])
 
 # ----------- MongoDB CRUD -----------
 @router.get("/brokers", response_model=List[BrokerConfig])
-async def list_brokers():
+async def list_brokers(current_user: UserInDB = Depends(get_current_active_user)):
     db = AsyncIOMotorClient(MONGO_URL)[MONGO_DB_NAME]
-    cursor = db[MONGO_COLLECTION_NAME].find()
+    cursor = db[MONGO_COLLECTION_NAME].find({"user_id": str(current_user.id)})
     brokers = []
     async for doc in cursor:
-        if "_id" in doc and not isinstance(doc["_id"], str):
-            doc["_id"] = str(doc["_id"])
         brokers.append(BrokerConfig(**doc))
     return brokers
 
 @router.get("/brokers/{broker_id}", response_model=BrokerConfig)
-async def get_broker(broker_id: str):
+async def get_broker(broker_id: str, current_user: UserInDB = Depends(get_current_active_user)):
     db = AsyncIOMotorClient(MONGO_URL)[MONGO_DB_NAME]
-    doc = await db[MONGO_COLLECTION_NAME].find_one({"_id": broker_id})
+    try:
+        obj_id = ObjectId(broker_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid broker_id format")
+    
+    doc = await db[MONGO_COLLECTION_NAME].find_one({"_id": obj_id, "user_id": str(current_user.id)})
     if not doc:
-        raise HTTPException(status_code=404, detail="Broker配置不存在")
-    if "_id" in doc and not isinstance(doc["_id"], str):
-        doc["_id"] = str(doc["_id"])
+        raise HTTPException(status_code=404, detail="Broker配置不存在或无权访问")
     return BrokerConfig(**doc)
 
 @router.post("/brokers", response_model=BrokerConfig)
-async def create_broker(cfg: BrokerConfig):
+async def create_broker(cfg: BrokerConfig, current_user: UserInDB = Depends(get_current_active_user)):
     db = AsyncIOMotorClient(MONGO_URL)[MONGO_DB_NAME]
-    data = cfg.model_dump(by_alias=True, exclude_unset=True)
     
-    # 强制初始化版本信息（去除 enabled 字段）
+    # cfg from request body already includes user_id due to model change, 
+    # but we should explicitly set/override it to the current_user's ID for security.
+    data = cfg.model_dump(by_alias=True, exclude_unset=True)
+    data["user_id"] = str(current_user.id) # Ensure it's current user's ID
+    
+    _id_to_use = data.get("_id") 
+    if _id_to_use is None: 
+        _id_to_use = ObjectId()
+    elif not isinstance(_id_to_use, ObjectId):
+        try:
+            _id_to_use = ObjectId(str(_id_to_use)) 
+        except Exception:
+            # This should be caught by Pydantic validation of cfg if client sends invalid _id string
+            pass 
+
     data.update({
-        "_id": data.get("_id") or str(uuid.uuid4()),
+        "_id": _id_to_use,
+        "user_id": str(current_user.id), # Re-affirm user_id from authenticated user
         "version": 1,
         "last_modified": time.time()
     })
     
+    # Check if hostname is provided, as it's mandatory in the model but not enforced here before insert
+    if "hostname" not in data or not data["hostname"]:
+        raise HTTPException(status_code=422, detail="Hostname is required for BrokerConfig")
+
     await db[MONGO_COLLECTION_NAME].insert_one(data)
     return BrokerConfig(**data)
 
 @router.put("/brokers/{broker_id}", response_model=BrokerConfig)
-async def update_broker(broker_id: str, cfg: BrokerConfig):
-    # 在更新前添加
-    if "version" in cfg.model_dump(exclude_unset=True):
-        raise HTTPException(400, "版本号不能手动修改")
+async def update_broker(broker_id: str, cfg_update: BrokerConfig, current_user: UserInDB = Depends(get_current_active_user)):
+    if "version" in cfg_update.model_dump(exclude_unset=True):
+        raise HTTPException(status_code=400, detail="版本号不能手动修改")
     
     db = AsyncIOMotorClient(MONGO_URL)[MONGO_DB_NAME]
+    try:
+        obj_id = ObjectId(broker_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid broker_id format")
+
+    current_broker_doc = await db[MONGO_COLLECTION_NAME].find_one({"_id": obj_id, "user_id": str(current_user.id)})
+    if not current_broker_doc:
+        raise HTTPException(status_code=404, detail="Broker配置不存在或无权修改")
     
-    # 获取当前版本
-    current = await db[MONGO_COLLECTION_NAME].find_one({"_id": broker_id})
-    if not current:
-        raise HTTPException(status_code=404, detail="Broker配置不存在")
-    
-    # 构建更新操作
-    update_data = cfg.model_dump(exclude={'version', 'last_modified'})
+    update_data = cfg_update.model_dump(exclude_unset=True, exclude={'id', '_id', 'user_id', 'version', 'last_modified'})
+    # user_id should not be updatable via this endpoint
+    update_data["user_id"] = str(current_user.id) # Ensure user_id remains current user's
     update_data.update({
-        "version": current.get("version", 0) + 1,
+        "version": current_broker_doc.get("version", 0) + 1,
         "last_modified": time.time()
     })
     
-    # 使用原子操作更新
     result = await db[MONGO_COLLECTION_NAME].update_one(
-        {"_id": broker_id},
+        {"_id": obj_id, "user_id": str(current_user.id)}, # Ensure only owner can update
         {"$set": update_data}
     )
     
-    if result.modified_count == 0:
-        raise HTTPException(status_code=500, detail="更新失败")
-    
-    # 返回更新后的完整文档
-    updated = await db[MONGO_COLLECTION_NAME].find_one({"_id": broker_id})
-    updated["_id"] = str(updated["_id"])
-    return BrokerConfig(**updated)
+    if result.matched_count == 0: # Check matched_count to ensure the find criteria was met
+        # This case might happen if, concurrently, the item was deleted or user_id changed (though user_id shouldn't change)
+        raise HTTPException(status_code=404, detail="Broker配置不存在或更新冲突")
+    if result.modified_count == 0 and update_data: # If there were actual changes proposed but nothing modified
+        # This means the submitted data was identical to existing data or update_data was empty after exclusions
+        # Return the current document as no modification occurred but the request was valid.
+        pass # Allow returning the fetched document
+
+    updated_doc = await db[MONGO_COLLECTION_NAME].find_one({"_id": obj_id, "user_id": str(current_user.id)})
+    if not updated_doc:
+        raise HTTPException(status_code=404, detail="Broker配置更新后未找到")
+    return BrokerConfig(**updated_doc)
 
 @router.delete("/brokers/{broker_id}")
-async def delete_broker(broker_id: str):
+async def delete_broker(broker_id: str, current_user: UserInDB = Depends(get_current_active_user)):
     db = AsyncIOMotorClient(MONGO_URL)[MONGO_DB_NAME]
-    result = await db[MONGO_COLLECTION_NAME].delete_one({"_id": broker_id})
+    try:
+        obj_id = ObjectId(broker_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid broker_id format")
+        
+    result = await db[MONGO_COLLECTION_NAME].delete_one({"_id": obj_id, "user_id": str(current_user.id)})
     if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Broker配置不存在")
+        raise HTTPException(status_code=404, detail="Broker配置不存在或无权删除")
     return {"message": "已删除"}
 
 @router.get("/brokers/{broker_id}/versions")
@@ -123,13 +156,27 @@ async def get_version_history(
     # 假设有版本历史集合
     coll = db["broker_config_versions"]
     
-    total = await coll.count_documents({"config_id": broker_id})
-    cursor = coll.find({"config_id": broker_id})
+    # Ensure broker_id is used appropriately in query if it refers to an ObjectId string
+    # For this example, assuming config_id in 'broker_config_versions' is stored as string.
+    # If config_id is an ObjectId, convert broker_id to ObjectId for querying.
+    # query_filter = {"config_id": ObjectId(broker_id)} if ObjectId.is_valid(broker_id) else {"config_id": broker_id}
+    # For simplicity, if 'config_id' is always a string derived from an ObjectId:
+    query_filter = {"config_id": broker_id}
+
+    total = await coll.count_documents(query_filter)
+    cursor = coll.find(query_filter)
     cursor.sort("version", -1).skip((page-1)*page_size).limit(page_size)
     
     versions = []
     async for doc in cursor:
-        doc["_id"] = str(doc["_id"])
+        # doc["_id"] = str(doc["_id"]) # Removed, assuming PyObjectId handles it if part of a model
+        # If 'doc' is directly returned or part of a dict not processed by PyObjectId for '_id',
+        # manual conversion might still be needed for serialization if _id is an ObjectId.
+        # However, PyObjectId in models should handle this.
+        # The current response is a plain dict, so _id might need str conversion if it's ObjectId
+        if isinstance(doc.get("_id"), ObjectId):
+             doc["_id"] = str(doc["_id"]) # Keep for direct dict return if not using Pydantic model with PyObjectId for this specific dict
+
         doc["timestamp"] = datetime.fromtimestamp(doc["timestamp"]).isoformat()
         versions.append(doc)
         
@@ -191,18 +238,27 @@ async def list_user_subscriptions(
 ):
     """获取当前用户的所有订阅"""
     db = AsyncIOMotorClient(MONGO_URL)[MONGO_DB_NAME]
-    cursor = db[MONGO_USER_SUB_COLLECTION].find({"user_id": str(current_user.id)})
+    # Assuming current_user.id is a PyObjectId, it will be serialized to string for DB query
+    # or handled correctly if the DB driver/PyMongo expects ObjectId.
+    # For clarity, ensuring it's a string for the query if user_id in DB is a string.
+    # If user_id in DB is ObjectId, convert str(current_user.id) to ObjectId for query.
+    # Let's assume user_id is stored as a string in the 'mqtt_user_subscriptions' collection.
+    user_id_str = str(current_user.id) # current_user.id is PyObjectId, str() will use its serializer
+
+    cursor = db[MONGO_USER_SUB_COLLECTION].find({"user_id": user_id_str})
     subscriptions = []
     async for doc in cursor:
-        if "_id" in doc and not isinstance(doc["_id"], str):
-            doc["_id"] = str(doc["_id"])
-        # 强制转换user_id和topic为字符串，防止Pydantic校验失败
-        if "user_id" in doc and not isinstance(doc["user_id"], str):
-            doc["user_id"] = str(doc["user_id"])
-        if "topic" in doc and not isinstance(doc["topic"], str):
-            doc["topic"] = str(doc["topic"])
-        if "config_id" in doc and not isinstance(doc["config_id"], str):
-            doc["config_id"] = str(doc["config_id"])
+        # if "_id" in doc and not isinstance(doc["_id"], str): # Removed
+        #     doc["_id"] = str(doc["_id"]) # Removed
+        
+        # Ensure other fields are of correct type if needed, though Pydantic should handle.
+        # Example: Pydantic will validate 'user_id' against UserTopicSubscription.user_id (str)
+        # if "user_id" in doc and not isinstance(doc["user_id"], str):
+        #     doc["user_id"] = str(doc["user_id"])
+        # if "topic" in doc and not isinstance(doc["topic"], str):
+        #     doc["topic"] = str(doc["topic"])
+        # if "config_id" in doc and not isinstance(doc["config_id"], str):
+        #     doc["config_id"] = str(doc["config_id"])
         subscriptions.append(UserTopicSubscription(**doc))
     return subscriptions
 
@@ -229,7 +285,14 @@ async def create_subscription(
         raise HTTPException(status_code=400, detail="主题格式错误")
     
     db = AsyncIOMotorClient(MONGO_URL)[MONGO_DB_NAME]
-    config = await db[MONGO_COLLECTION_NAME].find_one({"_id": config_id})
+    
+    # Convert config_id string to ObjectId for querying
+    try:
+        broker_object_id = ObjectId(config_id)
+    except Exception: # Handles invalid ObjectId format
+        raise HTTPException(status_code=400, detail=f"无效的Broker配置ID格式: {config_id}")
+        
+    config = await db[MONGO_COLLECTION_NAME].find_one({"_id": broker_object_id})
     if not config:
         raise HTTPException(status_code=404, detail="Broker配置不存在")
     
@@ -245,7 +308,7 @@ async def create_subscription(
         if existing:
             continue
         sub_data = {
-            "_id": str(uuid.uuid4()),
+            "_id": ObjectId(),
             "user_id": str(current_user.id),
             "config_id": str(config_id),
             "topic": str(topic),
@@ -271,37 +334,50 @@ async def delete_subscription(
     sub_id: str,
     current_user: UserInDB = Depends(get_current_active_user)
 ):
-    """删除订阅"""
+    """删除用户订阅并通知网关"""
     db = AsyncIOMotorClient(MONGO_URL)[MONGO_DB_NAME]
     
-    # 查找订阅
-    subscription = await db[MONGO_USER_SUB_COLLECTION].find_one({
-        "_id": sub_id,
-        "user_id": str(current_user.id)
-    })
+    try:
+        obj_id = ObjectId(sub_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="无效的订阅ID格式")
+
+    # 1. Find the subscription document BEFORE deleting it to get details for notification
+    subscription_to_delete = await db[MONGO_USER_SUB_COLLECTION].find_one(
+        {"_id": obj_id, "user_id": str(current_user.id)}
+    )
+
+    if not subscription_to_delete:
+        raise HTTPException(status_code=404, detail="订阅不存在或无权删除")
+
+    # 2. Delete the subscription from the database
+    result = await db[MONGO_USER_SUB_COLLECTION].delete_one(
+        {"_id": obj_id, "user_id": str(current_user.id)}
+    )
     
-    if not subscription:
-        raise HTTPException(status_code=404, detail="订阅不存在或无权操作")
-    
-    # 删除订阅
-    result = await db[MONGO_USER_SUB_COLLECTION].delete_one({
-        "_id": sub_id,
-        "user_id": str(current_user.id)
-    })
-    
+    # Should always be 1 if find_one above succeeded, but good to check
     if result.deleted_count == 0:
-        raise HTTPException(status_code=500, detail="删除失败")
-    
-    # 发送Redis命令通知网关
-    redis_pool = await get_redis_pool()
-    await redis_pool.lpush("mqtt_gateway:commands", json.dumps({
-        "action": "unsubscribe",
-        "config_id": str(subscription["config_id"]),
-        "user_id": str(current_user.id),
-        "topic": subscription["topic"]
-    }))
-    
-    return {"message": "已删除"}
+        # This case should ideally not be reached if find_one found the doc
+        raise HTTPException(status_code=404, detail="订阅删除失败，可能已被删除") 
+
+    # 3. Notify MQTT Gateway via Redis command
+    try:
+        redis_pool_instance = await get_redis_pool() # Get Redis connection
+        command_payload = {
+            "action": "unsubscribe",
+            "config_id": str(subscription_to_delete.get("config_id")), # Ensure it's string
+            "user_id": str(current_user.id), # or str(subscription_to_delete.get("user_id"))
+            "topic": subscription_to_delete.get("topic")
+            # qos is not strictly needed for unsubscribe command but can be included if useful
+        }
+        await redis_pool_instance.lpush("mqtt_gateway:commands", json.dumps(command_payload))
+        logger.info(f"Sent unsubscribe command to Redis for sub_id {sub_id}, topic {command_payload['topic']}")
+    except Exception as e:
+        logger.error(f"发送取消订阅命令到 Redis 失败 (sub_id: {sub_id}): {e}", exc_info=True)
+        # Decide if this should be a critical error. For now, we log and proceed.
+        # The subscription is deleted from DB; gateway might eventually sync via config_watcher or periodic checks.
+        
+    return {"message": "订阅已删除，并已通知网关处理"}
 
 @router.get("/subscriptions/topics")
 async def get_topic_suggestions():

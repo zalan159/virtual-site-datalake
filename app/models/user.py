@@ -1,61 +1,68 @@
-from pydantic import BaseModel, EmailStr, constr, Field
-from typing import Optional, List, Annotated
+from pydantic import BaseModel, EmailStr, Field, GetCoreSchemaHandler
+from typing import Optional, List, Any
 from datetime import datetime
 from enum import Enum
 from bson import ObjectId
+from pydantic_core import core_schema
 
 class PyObjectId(ObjectId):
     @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
+    def __get_pydantic_core_schema__(
+        cls, source_type: Any, handler: GetCoreSchemaHandler
+    ) -> core_schema.CoreSchema:
+        
+        def validate_objectid(value: Any) -> ObjectId:
+            if isinstance(value, ObjectId):
+                return value
+            if isinstance(value, str):
+                if ObjectId.is_valid(value):
+                    return ObjectId(value)
+                raise ValueError(f"'{value}' is not a valid ObjectId")
+            raise TypeError(f"ObjectId or string is required, got {type(value)}")
 
-    @classmethod
-    def validate(cls, v):
-        if not ObjectId.is_valid(v):
-            raise ValueError("Invalid ObjectId")
-        return ObjectId(v)
+        python_schema = core_schema.no_info_plain_validator_function(validate_objectid)
+        
+        # For OpenAPI schema generation, represent as a string
+        json_schema_repr = core_schema.str_schema()
 
-    @classmethod
-    def __get_pydantic_json_schema__(cls, core_schema, handler):
-        # 这里需要根据你的自定义 schema 逻辑迁移，参考 Pydantic v2 文档
-        return handler(core_schema)
+        return core_schema.json_or_python_schema(
+            json_schema=json_schema_repr,
+            python_schema=python_schema,
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                lambda x: str(x), # Serialize ObjectId to string
+                when_used='json-unless-none' # Apply for JSON serialization if not None
+            )
+        )
 
 class UserRole(str, Enum):
     ADMIN = "admin"
     USER = "user"
 
 class UserBase(BaseModel):
-    email: Optional[EmailStr] = None  # 邮箱选填
+    email: Optional[EmailStr] = None
     username: str
-    phone: Annotated[str, constr(pattern=r'^1\d{10}$')]  # 手机号必填，且必须符合格式
+    phone: str = Field(pattern=r'^1\d{10}$')
 
 class UserCreate(UserBase):
     password: str
 
-class UserInDB(UserBase):
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
-    hashed_password: str
+class UserInDBBase(UserBase):
+    id: PyObjectId = Field(alias="_id")
     is_active: bool = True
     role: UserRole = UserRole.USER
-    created_at: datetime = datetime.now()
-    updated_at: datetime = datetime.now()
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
 
-    class Config:
-        validate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+    model_config = {
+        "populate_by_name": True,
+        "arbitrary_types_allowed": True
+    }
 
-class User(UserBase):
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
-    is_active: bool
-    role: UserRole
-    created_at: datetime
-    updated_at: datetime
+class UserInDB(UserInDBBase):
+    hashed_password: str
 
-    class Config:
-        validate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+class User(UserInDBBase):
+    pass
 
 class Token(BaseModel):
     access_token: str

@@ -7,7 +7,7 @@ from datetime import datetime
 from fastapi.responses import JSONResponse
 import traceback
 import sys
-
+from fastapi.staticfiles import StaticFiles
 
 from app.routers import auth, files, tasks, attachments, metadata, scene, public_models , streams
 from app.routers import iot  # 新增
@@ -50,13 +50,21 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# 配置FastAPI以处理大文件上传 - 禁用默认的大小限制
+# 配置 CORS 中间件
+origins = [
+    "http://localhost:5173", # 允许的前端开发服务器
+    "http://127.0.0.1:5173",
+    "http://localhost:3000", # 添加你的前端源
+    "http://127.0.0.1:3000", 
+    # 你可以添加更多的源
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],  # 允许前端开发服务器
-    allow_credentials=True,  # 允许携带凭证
-    allow_methods=["*"],  # 允许所有HTTP方法
-    allow_headers=["*"],  # 允许所有头部
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"], # 允许所有方法
+    allow_headers=["*"], # 允许所有头部
     expose_headers=["*"],  # 允许前端访问响应头
     max_age=3600,  # 预检请求的缓存时间
 )
@@ -156,4 +164,4 @@ async def validation_exception_handler(request: Request, exc):
     return JSONResponse(
         status_code=422,
         content={"detail": str(exc)},
-    ) 
+    )

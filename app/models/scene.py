@@ -85,8 +85,10 @@ class SceneUpdate(BaseModel):
     name: Optional[str] = None
     origin: Optional[dict] = None  # 新增
     # 允许额外字段
-    class Config:
-        extra = "allow"
+    # Pydantic V2 使用 model_config
+    model_config = {
+        "extra": "allow"
+    }
 
 class ScenePreviewUpdate(BaseModel):
     preview_image: str

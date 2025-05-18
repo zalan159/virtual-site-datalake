@@ -58,7 +58,7 @@ class ThreeDTilesProcessor:
             
             # 从字典创建ThreeDTilesCreate对象
             try:
-                threedtiles_data = parse_obj_as(ThreeDTilesCreate, threedtiles_data_dict)
+                threedtiles_data = ThreeDTilesCreate.model_validate(threedtiles_data_dict)
                 print(f"[DEBUG] 成功解析为ThreeDTilesCreate对象: {threedtiles_data}")
             except Exception as e:
                 error_msg = f"解析ThreeDTilesCreate对象失败: {str(e)}"

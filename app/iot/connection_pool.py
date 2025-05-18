@@ -22,6 +22,7 @@ class MQTTConnection:
         self.conn_key = conn_key  # 连接唯一键 (hostname:port:username)
         self.broker_info = broker_info
         self.client: Optional[Client] = None
+        logger.info(f"[{self.conn_key}] MQTTConnection __init__: self.client is initially {self.client}, id: {id(self.client)}")
         self.client_task: Optional[asyncio.Task] = None
         self.subscriptions: Dict[str, Set[str]] = defaultdict(set)  # topic -> {user_id1, user_id2, ...}
         self.is_connected = False
@@ -41,9 +42,15 @@ class MQTTConnection:
             if self.is_connected and self.client and self.client_task and not self.client_task.done():
                 await self.connected_event.wait()  # 等待连接真正建立
                 return True
-            # 关闭旧连接
-            await self._close_connection()
-            # 创建新连接
+            
+            # Potentially problematic if _close_connection fails due to AttributeError
+            # Consider if this call is always safe or needed if self.client is None initially.
+            if self.client: # Only call _close_connection if there's an existing client to clean up
+                logger.info(f"[{self.conn_key}] ensure_connected: Found existing client, calling _close_connection first.")
+                await self._close_connection()
+            else:
+                logger.info(f"[{self.conn_key}] ensure_connected: No existing client, proceeding to create new one.")
+
             hostname = self.broker_info.get("hostname")
             port = self.broker_info.get("port", 1883)
             username = self.broker_info.get("username")
@@ -54,53 +61,85 @@ class MQTTConnection:
                     port=port,
                     username=username,
                     password=password
+                    # Ensure other necessary params like client_id, keepalive are considered if needed by your aiomqtt version or broker
                 )
-                self.connected_event.clear()  # 新建连接前清空事件
+                logger.info(f"[{self.conn_key}] ensure_connected: NEW self.client CREATED: {self.client}, id: {id(self.client)}, type: {type(self.client)}")
+                logger.info(f"[{self.conn_key}] ensure_connected: dir(self.client) AFTER CREATION: {dir(self.client)}")
+
+                self.connected_event.clear() 
                 self.client_task = asyncio.create_task(self._message_handler())
-                # 等待连接建立（最多等待10秒）
+                
                 try:
                     await asyncio.wait_for(self.connected_event.wait(), timeout=10)
                 except asyncio.TimeoutError:
-                    logger.error(f"[{self.conn_key}] 连接超时")
-                    return False
+                    logger.error(f"[{self.conn_key}] 连接超时等待 connected_event")
+                    # Even if timed out, the task is running. Consider cleanup or error propagation.
+                    # For now, let it proceed, _message_handler might still set is_connected.
+                    return False # Or handle more gracefully
+                
                 if not self.is_connected:
+                    logger.warning(f"[{self.conn_key}] ensure_connected: connected_event set, but is_connected is False. Task status: {self.client_task.done() if self.client_task else 'No task'}")
                     return False
-                self.reconnect_interval = 5  # 重置重连间隔
-                logger.info(f"[{self.conn_key}] 连接成功")
-                # 重新订阅所有主题
+                
+                self.reconnect_interval = 5 
+                logger.info(f"[{self.conn_key}] 连接成功 (ensure_connected)")
                 await self._resubscribe_all()
                 return True
             except Exception as e:
-                logger.error(f"[{self.conn_key}] 连接失败: {e}")
-                await asyncio.sleep(self.reconnect_interval)
-                self.reconnect_interval = min(self.reconnect_interval * 1.5, self.max_reconnect_interval)
+                logger.error(f"[{self.conn_key}] 创建MQTT Client或启动任务失败 (ensure_connected): {e}", exc_info=True)
+                # Fallback for self.client if instantiation failed before assignment
+                if hasattr(self, 'client') and self.client is not None:
+                     logger.info(f"[{self.conn_key}] ensure_connected: self.client after EXCEPTION: {self.client}, id: {id(self.client)}, type: {type(self.client)}")
+                # Exponential backoff for retries (if this method is called in a loop)
+                # await asyncio.sleep(self.reconnect_interval)
+                # self.reconnect_interval = min(self.reconnect_interval * 1.5, self.max_reconnect_interval)
                 return False
     
     async def _close_connection(self):
         """关闭连接（增强版）"""
-        try:
-            if self.client_task:
+        logger.info(f"[{self.conn_key}] _close_connection called. Current client: {self.client}, id: {id(self.client) if self.client else 'N/A'}")
+        # 1. 取消并等待任务
+        if self.client_task:
+            if not self.client_task.done():
                 self.client_task.cancel()
                 try:
                     await self.client_task
                 except asyncio.CancelledError:
-                    logger.info(f"[{self.conn_key}] 连接任务已取消")
+                    logger.info(f"[{self.conn_key}] 连接任务已正确取消 (_close_connection)")
                 except Exception as e:
-                    logger.error(f"[{self.conn_key}] 关闭连接时发生错误: {e}")
-            if self.client:
-                try:
-                    await self.client.disconnect()
-                    logger.info(f"[{self.conn_key}] 已断开MQTT连接")
-                except MqttError as e:
-                    logger.error(f"[{self.conn_key}] 断开连接时发生MQTT错误: {e}")
-                except Exception as e:
-                    logger.error(f"[{self.conn_key}] 断开连接时发生未知错误: {e}")
-        finally:
-            self.client = None
-            self.client_task = None
-            self.is_connected = False
-            self.connected_event.clear()
-            self.subscriptions.clear()
+                    logger.error(f"[{self.conn_key}] _close_connection: 等待任务完成发生错误: {e}", exc_info=True)
+            else:
+                logger.info(f"[{self.conn_key}] _close_connection: 连接任务已完成，无需取消.")
+        
+        # 2. 关闭 aiomqtt.Client 实例
+        if self.client:
+            logger.info(f"[{self.conn_key}] _close_connection: self.client BEFORE __aexit__: {self.client}, id: {id(self.client)}, type: {type(self.client)}")
+            logger.info(f"[{self.conn_key}] _close_connection: dir(self.client) BEFORE __aexit__: {dir(self.client)}")
+            try:
+                # 使用 __aexit__ 来代替不存在的 disconnect 方法
+                # __aexit__ 会处理底层的 Paho client 的 disconnect
+                await self.client.__aexit__(None, None, None) 
+                logger.info(f"[{self.conn_key}] 已通过 __aexit__ 清理MQTT连接")
+            except MqttError as e: # aiomqtt.MqttError
+                logger.error(f"[{self.conn_key}] __aexit__ 时发生MQTT错误: {e}", exc_info=True)
+            # AttributeError 不应再发生，因为我们不再调用 .disconnect()
+            # except AttributeError as ae: 
+            #     logger.error(f"[{self.conn_key}] AttributeError during __aexit__ (should not happen): {ae}. Attributes of self.client: {dir(self.client)}", exc_info=True)
+            except Exception as e:
+                logger.error(f"[{self.conn_key}] __aexit__ 时发生未知错误: {e}", exc_info=True)
+        else:
+            logger.info(f"[{self.conn_key}] _close_connection: No client instance to run __aexit__ on.")
+        
+        # 3. 清理状态 (确保总是在 finally 中执行，或者在此处，因为前面错误已捕获)
+        # 将状态清理移到这里，确保即使 __aexit__ 出错也执行
+        self.client = None
+        self.client_task = None
+        self.is_connected = False # 标记为未连接
+        self.connected_event.clear() # 重置事件
+        # self.subscriptions.clear() # 通常在连接关闭时不清除订阅，因为它们可能需要用于重连后的重新订阅
+        # 但如果 _close_connection 意味着永久关闭，则清除是合理的。
+        # 暂时保留不清除，因为重连逻辑可能会用到。如果这是永久关闭，则应清除。
+        logger.info(f"[{self.conn_key}] _close_connection: Connection state reset.")
     
     async def _message_handler(self):
         """处理MQTT消息"""
@@ -295,10 +334,25 @@ class ConnectionPool:
     
     def __init__(self):
         self.connections: Dict[str, MQTTConnection] = {}  # 连接键 -> 连接对象
-        self.config_map: Dict[str, Dict] = {}  # config_id -> 配置信息
-        self.config_to_conn: Dict[str, str] = {}  # config_id -> 连接键
+        self.config_map: Dict[str, Dict] = {}  # config_id (string) -> 配置信息 (dict)
+        self.config_to_conn: Dict[str, str] = {}  # config_id (string) -> 连接键 (string)
         self.lock = asyncio.Lock()
     
+    def _get_string_broker_id(self, broker_config: Dict) -> Optional[str]:
+        """可靠地从broker_config字典中获取broker ID的字符串形式。"""
+        if not broker_config:
+            logger.warning("空的 broker_config 传入 _get_string_broker_id")
+            return None
+
+        # 尝试获取 "id" (来自 Pydantic model.dump()) 或 "_id" (来自原始DB文档)
+        broker_id_val = broker_config.get("id", broker_config.get("_id"))
+        
+        if broker_id_val is None:
+            logger.warning(f"Broker config中缺少 'id' 或 '_id' : {broker_config.get('hostname', 'N/A')}")
+            return None # 或者根据策略返回一个唯一占位符或抛出错误
+        
+        return str(broker_id_val) #确保是字符串 (ObjectId会转为str, str保持不变)
+
     def get_connection_key(self, broker_config: Dict) -> str:
         """生成连接唯一键（简化版本）"""
         host = broker_config["hostname"]
@@ -316,16 +370,20 @@ class ConnectionPool:
         """获取使用指定连接的所有配置ID"""
         return [cfg_id for cfg_id, conn in self.config_to_conn.items() if conn == conn_key]
     
-    async def get_or_create_connection(self, broker_config: Dict) -> MQTTConnection:
+    async def get_or_create_connection(self, broker_config: Dict) -> Optional[MQTTConnection]:
         """获取或创建连接"""
         async with self.lock:
+            broker_id_str = self._get_string_broker_id(broker_config)
+            if not broker_id_str:
+                logger.error(f"无法为 broker_config 获取有效的字符串ID: {broker_config.get('hostname', 'N/A')}")
+                return None #无法处理没有有效ID的配置
+
             # 保存配置信息
-            config_id = broker_config.get("id", "")
-            self.config_map[config_id] = broker_config
+            self.config_map[broker_id_str] = broker_config
             
             # 生成连接键
             conn_key = self.get_connection_key(broker_config)
-            self.config_to_conn[config_id] = conn_key
+            self.config_to_conn[broker_id_str] = conn_key
             
             # 获取或创建连接
             if conn_key not in self.connections:
@@ -336,14 +394,25 @@ class ConnectionPool:
     async def subscribe(self, broker_config: Dict, topic: str, qos: int, user_id: str) -> bool:
         """订阅主题，支持 topic 为 str 或 list[str]"""
         connection = await self.get_or_create_connection(broker_config)
-        return await connection.subscribe(topic, qos, user_id, broker_config.get("id", ""))
+        if not connection:
+            return False # 如果无法获取或创建连接
+            
+        broker_id_str = self._get_string_broker_id(broker_config)
+        if not broker_id_str:
+             logger.error(f"订阅时无法从 broker_config 获取有效的字符串ID: {broker_config.get('hostname', 'N/A')}")
+             return False
+        return await connection.subscribe(topic, qos, user_id, broker_id_str)
     
     async def unsubscribe(self, broker_config: Dict, topic: str, user_id: str) -> bool:
         """取消订阅主题，支持 topic 为 str 或 list[str]"""
-        conn_key = self.get_connection_key(broker_config)
+        conn_key = self.get_connection_key(broker_config) # Fine, uses hostname/port
         if conn_key in self.connections:
+            broker_id_str = self._get_string_broker_id(broker_config)
+            if not broker_id_str:
+                logger.error(f"取消订阅时无法从 broker_config 获取有效的字符串ID: {broker_config.get('hostname', 'N/A')}")
+                return False # 或者 True 如果认为操作不应失败
             return await self.connections[conn_key].unsubscribe(
-                topic, user_id, broker_config.get("id", "")
+                topic, user_id, broker_id_str
             )
         return True  # 如果连接不存在，视为成功
     

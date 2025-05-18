@@ -697,26 +697,20 @@ class ThreeDTilesService:
             
         return None, None, None
     
-    async def get_threedtiles(self, tile_id: str) -> ThreeDTilesInDB:
-        """
-        获取单个3DTiles模型信息
-        """
+    async def get_threedtiles(self, tile_id: str) -> dict:
         tile = await self.collection.find_one({"_id": ObjectId(tile_id)})
         if not tile:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"ID为{tile_id}的3DTiles模型不存在"
             )
-        return ThreeDTilesInDB(**tile)
+        return tile
     
-    async def get_all_threedtiles(self, skip: int = 0, limit: int = 100) -> List[ThreeDTilesInDB]:
-        """
-        获取所有3DTiles模型列表
-        """
+    async def get_all_threedtiles(self, skip: int = 0, limit: int = 100) -> list:
         tiles = []
         cursor = self.collection.find().skip(skip).limit(limit)
         async for document in cursor:
-            tiles.append(ThreeDTilesInDB(**document))
+            tiles.append(document)
         return tiles
     
     async def update_threedtiles(self, tile_id: str, update_data: ThreeDTilesUpdate) -> ThreeDTilesInDB:

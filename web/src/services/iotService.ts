@@ -2,6 +2,7 @@ import api from './axiosConfig';
 
 export interface BrokerConfig {
   _id?: string;
+  user_id?: string;
   hostname: string;
   port: number;
   username?: string;

@@ -42,6 +42,11 @@ async def get_user(username: str) -> Optional[UserInDB]:
         # 确保phone字段存在
         if "phone" not in user_dict:
             user_dict["phone"] = "10000000000"  # 设置一个默认值
+        
+        # PyObjectId 将自动处理 ObjectId 和字符串，无需手动转换
+        # if "_id" in user_dict and isinstance(user_dict["_id"], ObjectId):
+        # user_dict["_id"] = str(user_dict["_id"])
+            
         return UserInDB(**user_dict)
     return None
 

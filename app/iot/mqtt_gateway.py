@@ -14,6 +14,7 @@ import sys
 import asyncio
 from app.iot.connection_pool import ConnectionPool, init_connection_pool
 from app.models.iot import BrokerConfig, TopicSubscription, UserTopicSubscription
+from bson import ObjectId
 
 if sys.platform.startswith('win'):
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -120,8 +121,6 @@ async def load_configs(last_check: float = 0) -> Tuple[List[Dict[str, Any]], flo
         
         async for doc in coll.find(query):
             try:
-                if "_id" in doc and not isinstance(doc["_id"], str):
-                    doc["_id"] = str(doc["_id"])
                 validated = BrokerConfig(**doc).model_dump()
                 changed_cfgs.append(validated)
             except Exception as err:
@@ -136,27 +135,28 @@ async def load_configs(last_check: float = 0) -> Tuple[List[Dict[str, Any]], flo
             client.close()
 
 # --------------------------- 用户订阅管理 --------------------
-async def load_user_subscriptions(config_id: str = None):
+async def load_user_subscriptions(config_id_str: str = None):
     """加载用户订阅关系"""
     client = None
+    logger.info(f"LOAD_USER_SUBS: Attempting to load subscriptions for config_id_str: '{config_id_str}'")
     try:
         client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
         coll = client[MONGO_DB_NAME][MONGO_USER_SUB_COLLECTION]
         
-        # 构建查询
         query = {}
-        if config_id:
-            query["config_id"] = config_id
+        if config_id_str: # config_id_str is a string
+            # Query mqtt_user_subscriptions using the string config_id_str directly,
+            # as this collection is expected to store config_id as a string.
+            query["config_id"] = config_id_str
+            logger.info(f"LOAD_USER_SUBS: Querying mqtt_user_subscriptions with config_id as STRING: '{config_id_str}'")
         
         subscriptions = []
         async for doc in coll.find(query):
-            if "_id" in doc and not isinstance(doc["_id"], str):
-                doc["_id"] = str(doc["_id"])
             subscriptions.append(doc)
-        
+        logger.info(f"LOAD_USER_SUBS: Found {len(subscriptions)} subscriptions using query: {query}")
         return subscriptions
     except Exception as exc:
-        logger.error("读取用户订阅失败: %s", exc)
+        logger.error(f"LOAD_USER_SUBS: Error reading user subscriptions for '{config_id_str}': {exc}", exc_info=True)
         return []
     finally:
         if client:
@@ -164,36 +164,62 @@ async def load_user_subscriptions(config_id: str = None):
 
 async def apply_user_subscriptions(config_id: str):
     """应用用户订阅"""
+    logger.info(f"APPLY_SUBS: Called for config_id: {config_id}")
     global connection_pool
     
-    # 加载配置
     client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
-    config = await client[MONGO_DB_NAME][MONGO_COLLECTION_NAME].find_one({"_id": config_id})
-    if not config:
-        logger.error(f"[{config_id}] 配置不存在")
+    try:
+        broker_object_id = ObjectId(config_id)
+    except Exception:
+        logger.error(f"APPLY_SUBS: [{config_id}] 无效的 Broker 配置ID格式 (apply_user_subscriptions)")
         return False
-    
-    # 加载用户订阅
+        
+    config = await client[MONGO_DB_NAME][MONGO_COLLECTION_NAME].find_one({"_id": broker_object_id})
+    if not config: 
+        logger.error(f"APPLY_SUBS: [{config_id}] 配置不存在")
+        return False
+    logger.info(f"APPLY_SUBS: [{config_id}] Broker config loaded successfully: hostname={config.get('hostname')}")
+
     subscriptions = await load_user_subscriptions(config_id)
+    logger.info(f"APPLY_SUBS: [{config_id}] Loaded {len(subscriptions)} user subscriptions from DB.")
     
-    # 应用订阅
-    for sub in subscriptions:
+    if not subscriptions:
+        logger.info(f"APPLY_SUBS: [{config_id}] No user subscriptions found for this config. No MQTT connection will be initiated by this config update.")
+        return True
+
+    for sub_idx, sub_doc in enumerate(subscriptions):
+        logger.info(f"APPLY_SUBS: [{config_id}] Processing raw subscription doc {sub_idx+1}/{len(subscriptions)}: {sub_doc}")
         try:
-            user_id = sub["user_id"]
-            topic = sub["topic"]
-            qos = sub.get("qos", 0)
-            # 兼容topic为list的情况
+            user_id = sub_doc.get("user_id")
+            topic = sub_doc.get("topic")
+            qos = sub_doc.get("qos", 0)
+
+            if not user_id or not topic:
+                logger.warning(f"APPLY_SUBS: [{config_id}] Subscription doc {sub_doc.get('_id')} is missing user_id or topic. Skipping.")
+                continue
+
+            logger.info(f"APPLY_SUBS: [{config_id}] Calling connection_pool.subscribe for user_id={user_id}, topic='{topic}'")
+            success = False
             if isinstance(topic, list):
-                for t in topic:
-                    await connection_pool.subscribe(config, t, qos, user_id)
-                    logger.info(f"[{config_id}] 应用用户{user_id}订阅: {t}")
+                for t_item in topic:
+                    if not t_item: continue
+                    logger.info(f"APPLY_SUBS: [{config_id}] Subscribing to list item topic: '{t_item}' for user {user_id}")
+                    s = await connection_pool.subscribe(config, t_item, qos, user_id)
+                    if s: success = True
+            elif isinstance(topic, str):
+                logger.info(f"APPLY_SUBS: [{config_id}] Subscribing to single topic: '{topic}' for user {user_id}")
+                success = await connection_pool.subscribe(config, topic, qos, user_id)
             else:
-                await connection_pool.subscribe(config, topic, qos, user_id)
-                logger.info(f"[{config_id}] 应用用户{user_id}订阅: {topic}")
+                logger.warning(f"APPLY_SUBS: [{config_id}] Subscription topic has unexpected type: {type(topic)}. Skipping.")
+                continue
+            
+            logger.info(f"APPLY_SUBS: [{config_id}] connection_pool.subscribe result for user {user_id}, topic(s) related to '{topic}': {success}")
+
+        except KeyError as e:
+            logger.error(f"APPLY_SUBS: [{config_id}] Subscription document {sub_doc.get('_id')} missing expected key: {e}. Skipping.")
         except Exception as e:
-            logger.error(f"[{config_id}] 应用订阅失败: {e}")
+            logger.error(f"APPLY_SUBS: [{config_id}] Error processing subscription {sub_doc.get('_id')}: {e}", exc_info=True)
     
-    # 清理无效连接
     await connection_pool.cleanup_idle_connections()
     
     return True
@@ -366,62 +392,68 @@ async def command_listener():
             try:
                 data = json.loads(payload)
                 action = data.get("action")
-                cfg_id = data.get("config_id")
+                cfg_id_str = data.get("config_id")
                 user_id = data.get("user_id")
                 topic = data.get("topic")
                 qos = data.get("qos", 0)
 
+                broker_obj_id_for_command = None
+                if cfg_id_str:
+                    try:
+                        broker_obj_id_for_command = ObjectId(cfg_id_str)
+                    except Exception:
+                        logger.error(f"[{cfg_id_str}] 命令中提供的配置ID格式无效")
+                        continue
+
                 if action == "reload":
-                    # 重新加载单个配置
-                    cfgs, _ = await load_configs(0)
-                    target_cfg = next((c for c in cfgs if c["id"] == cfg_id), None)
+                    if not broker_obj_id_for_command:
+                        logger.error("Reload 命令缺少有效的 config_id")
+                        continue
                     
-                    if target_cfg:
-                        # 重新应用用户订阅（连接池自动处理）
-                        await apply_user_subscriptions(cfg_id)
-                        logger.info(f"[{cfg_id}] 手动重载完成")
+                    client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
+                    target_cfg_doc = await client[MONGO_DB_NAME][MONGO_COLLECTION_NAME].find_one({"_id": broker_obj_id_for_command})
+                    
+                    if target_cfg_doc:
+                        await apply_user_subscriptions(cfg_id_str)
+                        logger.info(f"[{cfg_id_str}] 手动重载完成")
+                    else:
+                        logger.error(f"[{cfg_id_str}] Reload 命令：找不到配置")
 
                 elif action == "subscribe":
-                    # 动态添加订阅（通过连接池处理）
-                    if not all([cfg_id, user_id, topic]):
-                        logger.error("订阅命令缺少必要参数")
+                    if not all([broker_obj_id_for_command, user_id, topic]):
+                        logger.error("订阅命令缺少必要参数或有效config_id")
                         continue
                     
-                    # 获取配置
                     client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
-                    config = await client[MONGO_DB_NAME][MONGO_COLLECTION_NAME].find_one({"_id": cfg_id})
-                    if not config:
-                        logger.error(f"[{cfg_id}] 配置不存在")
+                    config_doc = await client[MONGO_DB_NAME][MONGO_COLLECTION_NAME].find_one({"_id": broker_obj_id_for_command})
+                    if not config_doc:
+                        logger.error(f"[{cfg_id_str}] 配置不存在 (subscribe command)")
                         continue
                     
-                    # 直接通过连接池订阅
-                    success = await connection_pool.subscribe(config, topic, qos, user_id)
+                    success = await connection_pool.subscribe(config_doc, topic, qos, user_id)
                     
                     if success:
-                        logger.info(f"[{cfg_id}] 用户{user_id}订阅主题{topic}成功")
+                        logger.info(f"[{cfg_id_str}] 用户{user_id}订阅主题{topic}成功")
                     else:
-                        logger.error(f"[{cfg_id}] 用户{user_id}订阅主题{topic}失败")
+                        logger.error(f"[{cfg_id_str}] 用户{user_id}订阅主题{topic}失败")
 
                 elif action == "unsubscribe":
-                    # 动态取消订阅（通过连接池处理）
-                    if not all([cfg_id, user_id, topic]):
-                        logger.error("取消订阅命令缺少必要参数")
+                    if not all([broker_obj_id_for_command, user_id, topic]):
+                        logger.error("取消订阅命令缺少必要参数或有效config_id")
                         continue
                     
-                    # 获取配置
                     client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
-                    config = await client[MONGO_DB_NAME][MONGO_COLLECTION_NAME].find_one({"_id": cfg_id})
-                    if not config:
-                        logger.error(f"[{cfg_id}] 配置不存在")
+                    config_doc = await client[MONGO_DB_NAME][MONGO_COLLECTION_NAME].find_one({"_id": broker_obj_id_for_command})
+                    if not config_doc:
+                        logger.error(f"[{cfg_id_str}] 配置不存在 (unsubscribe command)")
                         continue
                     
-                    # 直接通过连接池取消订阅
-                    success = await connection_pool.unsubscribe(config, topic, user_id)
+                    success = await connection_pool.unsubscribe(config_doc, topic, user_id)
                     
                     if success:
-                        logger.info(f"[{cfg_id}] 用户{user_id}取消订阅主题{topic}成功")
+                        logger.info(f"[{cfg_id_str}] 用户{user_id}取消订阅主题{topic}成功")
                     else:
-                        logger.error(f"[{cfg_id}] 用户{user_id}取消订阅主题{topic}失败")
+                        logger.error(f"[{cfg_id_str}] 用户{user_id}取消订阅主题{topic}失败")
 
             except json.JSONDecodeError:
                 logger.error("无效的命令格式")
