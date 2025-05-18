@@ -7,11 +7,7 @@ import {
   FreeCamera, 
   Vector3, 
   HemisphericLight, 
-  MeshBuilder, 
-  StandardMaterial, 
-  Color3,
   SceneLoader,
-  PointerEventTypes,
   Tools
 } from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';

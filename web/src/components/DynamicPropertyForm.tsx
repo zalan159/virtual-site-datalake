@@ -4,7 +4,7 @@ import { UploadOutlined, PlusOutlined, MinusCircleOutlined } from '@ant-design/i
 import type { UploadFile } from 'antd/es/upload/interface';
 import moment from 'moment';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 const { TextArea } = Input;
 const { Panel } = Collapse;
 
@@ -51,7 +51,6 @@ export interface DynamicPropertyFormProps {
 }
 
 const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
-  entityId,
   data,
   metadata,
   loading = false,
@@ -62,7 +61,6 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
   onUpdatePreviewImage,
   startPickOrigin,
   isPickingOrigin,
-  pickedOrigin
 }) => {
   // 添加console.log来打印data和metadata
   console.log('DynamicPropertyForm data:', data);
@@ -97,7 +95,7 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
   };
 
   // 处理上传文件
-  const handleFileUpload = async (file: UploadFile, fieldName: string): Promise<string> => {
+  const handleFileUpload = async (_file: UploadFile, fieldName: string): Promise<string> => {
     // 模拟文件上传过程，实际应该调用文件上传接口
     const fakeUrl = 'https://example.com/fake-image-url.jpg';
     handleFieldChange(fieldName, fakeUrl);

@@ -1,10 +1,10 @@
 import {
-  AlipayOutlined,
+
   LockOutlined,
   MobileOutlined,
-  TaobaoOutlined,
+
   UserOutlined,
-  WeiboOutlined,
+
 } from '@ant-design/icons';
 import {
   LoginFormPage,
@@ -14,20 +14,20 @@ import {
   ProFormText,
   ModalForm,
 } from '@ant-design/pro-components';
-import { Button, Divider, Space, Tabs, theme, Form, App } from 'antd';
-import type { CSSProperties } from 'react';
+import { Button,  Tabs, theme, Form, App } from 'antd';
+// import type { CSSProperties } from 'react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authAPI } from '../../services/api';
 
 type LoginType = 'phone' | 'account';
 
-const iconStyles: CSSProperties = {
-  color: 'rgba(0, 0, 0, 0.2)',
-  fontSize: '18px',
-  verticalAlign: 'middle',
-  cursor: 'pointer',
-};
+// const iconStyles: CSSProperties = {
+//   color: 'rgba(0, 0, 0, 0.2)',
+//   fontSize: '18px',
+//   verticalAlign: 'middle',
+//   cursor: 'pointer',
+// };
 
 const LoginPage = () => {
   const [loginType, setLoginType] = useState<LoginType>('account');

@@ -2,7 +2,6 @@
 import { useState, useCallback } from 'react';
 import { Viewer, Cartesian2, Cartesian3, Cartographic, Math as CesiumMath, Transforms, Model, CustomShader } from 'cesium';
 import * as Cesium from 'cesium';
-import { message } from 'antd';
 import modelAPI from '../services/modelApi'; // 假设路径正确
 import { downloadPublicModel } from '../services/publicModels'; // 导入公共模型下载API
 import { ModelAsset } from './useModelAssets'; // 引入模型类型
@@ -348,7 +347,7 @@ export const useCesiumDragAndDrop = (
           messageApi.error(`3DTiles "${modelName}" 实例化失败`);
           return;
         }
-        const { instanceId, modelUrl } = result;
+        const { instanceId } = result;
         // 3. Cesium加载3DTiles
         let fullTilesetUrl = tilesetUrl;
         if (tilesetUrl.startsWith('/')) {

@@ -1,5 +1,5 @@
-import { Table, Button, Space, Tag, Typography, Card, Progress, Select, Modal, App, message } from 'antd';
-import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, ReloadOutlined, FileOutlined, GlobalOutlined } from '@ant-design/icons';
+import { Table, Button, Space, Tag, Typography, Card, Progress, Select, Modal, App } from 'antd';
+import {  DeleteOutlined, ExclamationCircleOutlined, ReloadOutlined, FileOutlined, GlobalOutlined } from '@ant-design/icons';
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import taskAPI, { Task, TaskStatus, TaskType } from '../../services/taskApi';
@@ -206,7 +206,7 @@ const TaskList: React.FC = () => {
     {
       title: '资源名称',
       key: 'resource_name',
-      render: (text: any, record: Task) => getResourceName(record),
+      render: (_: any, record: Task) => getResourceName(record),
     },
     {
       title: '任务类型',

@@ -300,9 +300,7 @@ interface AssetTabsProps {
 export const AssetTabs: React.FC<AssetTabsProps> = ({
   models,
   loadingModels,
-  materials,
   onModelDragStart,
-  onMaterialDragStart,
   onPublicModelDragStart,
   onThreeDTilesDragStart,
 }) => {

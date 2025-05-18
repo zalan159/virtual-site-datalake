@@ -9,13 +9,13 @@ import {
   PaperClipOutlined,
   UserOutlined,
   PictureOutlined,
-  RobotOutlined,
+  // RobotOutlined,
   ApiOutlined,
 } from '@ant-design/icons';
 
 import LoginPage from '../pages/Login';
 import HomePage from '../pages/Home';
-import MainLayout from '../layouts/MainLayout';
+// import MainLayout from '../layouts/MainLayout';
 import ModelList from '../pages/Models/ModelList';
 import TaskList from '../pages/Models/TaskList';
 import ModelPreviewStandalone from '../pages/Models/ModelPreviewStandalone';
@@ -28,13 +28,13 @@ import GISData from '../pages/Data/GISData';
 import ERPData from '../pages/Data/ERPData';
 import UserSettings from '../pages/UserSettings';
 import SceneList from '../pages/Scenes/SceneList';
-import SceneEditor from '../pages/Scenes/SceneEditor';
+// import SceneEditor from '../pages/Scenes/SceneEditor';
 import MaterialList from '../pages/Models/MaterialList';
 import DataTemplate from '../pages/Data/DataTemplate';
-import AgentPage from '../pages/Agent';
+// import AgentPage from '../pages/Agent';
 import ModelInstances from '../pages/Data/ModelInstances';
 import SceneEditorStandalone from '../pages/Scenes/SceneEditorStandalone';
-import AdminIndex from '../pages/Admin';
+// import AdminIndex from '../pages/Admin';
 import PublicModels from '../pages/Admin/PublicModels';
 import UserPublicModels from '../pages/Models/PublicModels';
 import TilesetViewer from '../pages/TilesetViewer';

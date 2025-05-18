@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Card, Input, Tabs, Spin, App as AntdApp } from 'antd';
+import { Card, Tabs, Spin, App as AntdApp } from 'antd';
 import * as Cesium from 'cesium';
 import { SelectedModelInfo } from '../../hooks/useCesiumInteractions';
 import { getSceneDetail, updateSceneProperty, updateScenePreviewImage, getSceneInstanceTree, changeInstanceParent } from '../../services/sceneApi';
@@ -38,8 +38,8 @@ const SceneSidebar: React.FC<SceneSidebarProps> = ({
   const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([]);
   
   // 搜索相关状态
-  const [searchValue, setSearchValue] = useState('');
-  const [autoExpandParent, setAutoExpandParent] = useState(true);
+  const [searchValue] = useState('');
+  const [autoExpandParent] = useState(true);
   
   const [isPickingOrigin, setIsPickingOrigin] = useState(false); // 是否处于选点模式
   const [pickedOrigin, setPickedOrigin] = useState<{longitude: number, latitude: number, height: number} | null>(null); // 选中的原点
@@ -210,35 +210,35 @@ const SceneSidebar: React.FC<SceneSidebarProps> = ({
   };
 
   // 搜索时展开所有包含关键字的父节点
-  const onSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { value } = e.target;
-    setSearchValue(value);
-    if (!value) {
-      setExpandedKeys(getAllKeys(instanceTreeData));
-      setAutoExpandParent(false);
-      return;
-    }
-    const expandedKeys = instanceTreeData
-      .reduce((acc: React.Key[], node: any) => {
-        const search = (n: any): React.Key[] => {
-          let keys: React.Key[] = [];
-          if (n.title && n.title.indexOf(value) > -1) {
-            keys.push(n.key);
-          }
-          if (n.children) {
-            n.children.forEach((child: any) => {
-              keys = keys.concat(search(child));
-            });
-          }
-          return keys;
-        };
-        return acc.concat(search(node));
-      }, [])
-      .map((key: React.Key) => getParentKey(key, instanceTreeData) as React.Key)
-      .filter((key, i, self) => key && self.indexOf(key) === i);
-    setExpandedKeys(expandedKeys as React.Key[]);
-    setAutoExpandParent(true);
-  };
+  // const onSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  //   const { value } = e.target;
+  //   setSearchValue(value);
+  //   if (!value) {
+  //     setExpandedKeys(getAllKeys(instanceTreeData));
+  //     setAutoExpandParent(false);
+  //     return;
+  //   }
+  //   const expandedKeys = instanceTreeData
+  //     .reduce((acc: React.Key[], node: any) => {
+  //       const search = (n: any): React.Key[] => {
+  //         let keys: React.Key[] = [];
+  //         if (n.title && n.title.indexOf(value) > -1) {
+  //           keys.push(n.key);
+  //         }
+  //         if (n.children) {
+  //           n.children.forEach((child: any) => {
+  //             keys = keys.concat(search(child));
+  //           });
+  //         }
+  //         return keys;
+  //       };
+  //       return acc.concat(search(node));
+  //     }, [])
+  //     .map((key: React.Key) => getParentKey(key, instanceTreeData) as React.Key)
+  //     .filter((key, i, self) => key && self.indexOf(key) === i);
+  //   setExpandedKeys(expandedKeys as React.Key[]);
+  //   setAutoExpandParent(true);
+  // };
 
   // 传递 fetchInstanceTree 给父组件
   useEffect(() => {

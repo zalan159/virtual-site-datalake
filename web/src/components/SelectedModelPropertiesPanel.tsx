@@ -4,7 +4,6 @@ import { Empty, Spin, Tabs, App as AntdApp, Card } from 'antd';
 import { SelectedModelInfo } from '../hooks/useCesiumInteractions';
 import DynamicPropertyForm from './DynamicPropertyForm';
 import { getInstanceProperties, updateInstanceProperties } from '../services/sceneApi';
-import { message } from 'antd';
 
 interface SelectedModelPropertiesPanelProps {
   selectedModelInfo: SelectedModelInfo | null;

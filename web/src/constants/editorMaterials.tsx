@@ -1,4 +1,4 @@
-import React from 'react';
+
 import * as Cesium from 'cesium';
 
 export interface MaterialDefinition {

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Button, Space, Modal, Form, Input, message, Tag, Tooltip, Row, Col, InputNumber, Alert } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, ExclamationCircleOutlined, HistoryOutlined, ClockCircleOutlined, ProfileOutlined } from '@ant-design/icons';
+import { Card, Table, Button, Space, Modal, Form, Input, message, Row, Col, InputNumber, Alert } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, ExclamationCircleOutlined,  ProfileOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import { brokerAPI, BrokerConfig, TopicSubscription, MessageRecord, messageAPI, subscriptionAPI, UserTopicSubscription } from '../../services/iotService';
-import dayjs from 'dayjs';
+import { brokerAPI, BrokerConfig } from '../../services/iotService';
+// import dayjs from 'dayjs';
 import { Link } from 'react-router-dom';
 import './IoTData.css'; // 将样式移到外部CSS文件
 
@@ -13,7 +13,7 @@ const BrokerManagement: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [form] = Form.useForm();
   const [currentId, setCurrentId] = useState<string | null>(null);
-  const [userSubscriptions, setUserSubscriptions] = useState<UserTopicSubscription[]>([]);
+  // const [userSubscriptions, setUserSubscriptions] = useState<UserTopicSubscription[]>([]);
 
   useEffect(() => {
     loadData();
@@ -60,23 +60,23 @@ const BrokerManagement: React.FC = () => {
     });
   };
 
-  const messageColumns = [
-    {
-      title: '时间',
-      dataIndex: 'received_ts',
-      render: (ts: number) => dayjs(ts * 1000).format('YYYY-MM-DD HH:mm:ss')
-    },
-    { title: '主题', dataIndex: 'topic' },
-    {
-      title: '内容',
-      dataIndex: 'payload',
-      render: (payload: any) => (
-        <pre style={{ margin: 0, maxWidth: 400, overflow: 'auto' }}>
-          {JSON.stringify(payload, null, 2)}
-        </pre>
-      )
-    }
-  ];
+  // const messageColumns = [
+  //   {
+  //     title: '时间',
+  //     dataIndex: 'received_ts',
+  //     render: (ts: number) => dayjs(ts * 1000).format('YYYY-MM-DD HH:mm:ss')
+  //   },
+  //   { title: '主题', dataIndex: 'topic' },
+  //   {
+  //     title: '内容',
+  //     dataIndex: 'payload',
+  //     render: (payload: any) => (
+  //       <pre style={{ margin: 0, maxWidth: 400, overflow: 'auto' }}>
+  //         {JSON.stringify(payload, null, 2)}
+  //       </pre>
+  //     )
+  //   }
+  // ];
 
   const columns: ColumnsType<BrokerConfig> = [
     { title: '主机地址', dataIndex: 'hostname' },

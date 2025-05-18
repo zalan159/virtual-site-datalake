@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Button, Modal, Input, message, Space, Popconfirm } from 'antd';
+import { Card, Row, Col, Button, Modal, Input, message, Popconfirm } from 'antd';
 import { EditOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+// import { useNavigate } from 'react-router-dom';
 import { getSceneList, renameScene, deleteScene, createScene } from '../../services/sceneApi';
 
 // 场景类型定义
@@ -17,16 +17,16 @@ interface Scene {
 
 const SceneList: React.FC = () => {
   const [scenes, setScenes] = useState<Scene[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
+  // const [loading, setLoading] = useState<boolean>(false);
   const [renameModalVisible, setRenameModalVisible] = useState<boolean>(false);
   const [currentScene, setCurrentScene] = useState<Scene | null>(null);
   const [newSceneName, setNewSceneName] = useState<string>('');
   const [createModalVisible, setCreateModalVisible] = useState<boolean>(false);
   const [newCreateName, setNewCreateName] = useState<string>('');
-  const navigate = useNavigate();
+  // const navigate = useNavigate();
 
   useEffect(() => {
-    setLoading(true);
+    // setLoading(true);
     getSceneList()
       .then(res => {
         // 适配后端数据结构
@@ -46,7 +46,7 @@ const SceneList: React.FC = () => {
       .catch(() => {
         message.error('获取场景列表失败');
       })
-      .finally(() => setLoading(false));
+      // .finally(() => setLoading(false));
   }, []);
 
   // 处理场景点击，进入编辑页面
@@ -110,7 +110,7 @@ const SceneList: React.FC = () => {
       setCreateModalVisible(false);
       setNewCreateName('');
       // 重新加载场景列表
-      setLoading(true);
+      // setLoading(true);
       getSceneList()
         .then(res => {
           const data = Array.isArray(res.data) ? res.data : [];
@@ -129,7 +129,7 @@ const SceneList: React.FC = () => {
         .catch(() => {
           message.error('获取场景列表失败');
         })
-        .finally(() => setLoading(false));
+        // .finally(() => setLoading(false));
       message.success('新建场景成功');
     } catch {
       message.error('新建场景失败');

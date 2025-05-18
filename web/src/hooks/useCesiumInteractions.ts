@@ -1,5 +1,5 @@
 // hooks/useCesiumInteractions.ts
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { Viewer, ScreenSpaceEventHandler, ScreenSpaceEventType, Color, Model } from 'cesium';
 import * as Cesium from 'cesium';
 // @ts-ignore
@@ -21,7 +21,7 @@ export const useCesiumInteractions = (
 ) => {
   const lastHighlightedRef = useRef<any>(null);
   const lastColorRef = useRef<Color | undefined>(undefined);
-  const highlightMaterialRef = useRef<any>(null);
+  // const highlightMaterialRef = useRef<any>(null);
   // 添加当前Gizmo模式的状态引用
   const currentGizmoModeRef = useRef<string>(CesiumGizmo.Mode.TRANSLATE);
 
@@ -378,7 +378,7 @@ export const useCesiumInteractions = (
     // console.log('useCesiumInteractions: useEffect - ScreenSpaceEventHandler 已创建'); // 日志 D
 
     // 鼠标悬浮高亮
-    handler.setInputAction((movement: any) => {
+    handler.setInputAction(() => {
       // // console.log('MOUSE_MOVE 事件在 Cesium 画布上触发!');
       // clearHighlight(); // 先恢复上一个
 

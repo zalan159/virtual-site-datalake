@@ -1,10 +1,10 @@
-import { Table, Button, Space, Typography, Card, Upload, App, message, Progress, Modal, Image } from 'antd';
+import { Table, Button, Space, Typography, Card, Upload, App, Progress, Modal, Image } from 'antd';
 import { UploadOutlined, DownloadOutlined, DeleteOutlined, EyeOutlined, FilePdfOutlined, FileTextOutlined, FileUnknownOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
-import type { UploadProps, UploadFile } from 'antd';
+import type { UploadProps } from 'antd';
 import { attachmentApi, Attachment } from '../../services/attachmentApi';
 import ReactPlayer from 'react-player';
-import DocViewer, { DocViewerRenderers } from '@cyntler/react-doc-viewer';
+import DocViewer from '@cyntler/react-doc-viewer';
 
 const { Title } = Typography;
 
@@ -14,10 +14,9 @@ const AttachmentManagement: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [uploading, setUploading] = useState<boolean>(false);
-  const [downloadProgress, setDownloadProgress] = useState<number>(0);
-  const [downloading, setDownloading] = useState<boolean>(false);
-  const [downloadModalVisible, setDownloadModalVisible] = useState<boolean>(false);
-  const [currentDownloadFile, setCurrentDownloadFile] = useState<string>('');
+  const [downloadProgress] = useState<number>(0);
+  const [downloadModalVisible] = useState<boolean>(false);
+  const [currentDownloadFile] = useState<string>('');
   const [previewModalVisible, setPreviewModalVisible] = useState<boolean>(false);
   const [currentFile, setCurrentFile] = useState<Attachment | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>('');
@@ -67,7 +66,7 @@ const AttachmentManagement: React.FC = () => {
     }
   };
 
-  const handleDownload = async (id: string, filename: string) => {
+  const handleDownload = async (id: string) => {
     try {
       // 获取预签名URL
       const downloadUrl = await attachmentApi.getDownloadUrl(id);
@@ -217,7 +216,7 @@ const AttachmentManagement: React.FC = () => {
             <h3>{filename}</h3>
             <p>CAD 文件预览</p>
             <p>目前暂无CAD预览组件，请下载后使用CAD软件查看</p>
-            <Button type="primary" onClick={() => handleDownload(currentFile._id, filename)}>
+            <Button type="primary" onClick={() => handleDownload(currentFile._id)}>
               下载查看
             </Button>
           </div>
@@ -230,7 +229,7 @@ const AttachmentManagement: React.FC = () => {
             <FileTextOutlined style={{ fontSize: '64px', color: '#1890ff' }} />
             <p>文本文件</p>
             <p>文件名: {filename}</p>
-            <Button type="primary" onClick={() => handleDownload(currentFile._id, filename)}>
+            <Button type="primary" onClick={() => handleDownload(currentFile._id)}>
               下载查看
             </Button>
           </div>
@@ -244,7 +243,7 @@ const AttachmentManagement: React.FC = () => {
             <p>该文件类型暂不支持在线预览</p>
             <p>文件名: {filename}</p>
             <p>文件类型: {extension}</p>
-            <Button type="primary" onClick={() => handleDownload(currentFile._id, filename)}>
+            <Button type="primary" onClick={() => handleDownload(currentFile._id)}>
               下载查看
             </Button>
           </div>
@@ -296,7 +295,7 @@ const AttachmentManagement: React.FC = () => {
           <Button 
             type="link" 
             icon={<DownloadOutlined />}
-            onClick={() => handleDownload(record._id, record.filename)}
+            onClick={() => handleDownload(record._id)}
           >
             下载
           </Button>

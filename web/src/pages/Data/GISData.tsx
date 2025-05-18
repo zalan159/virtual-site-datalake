@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Table, Button, Space, Modal, Form, Input, message, Tag, Tooltip, Select, Upload, InputNumber, Progress, notification } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, ExclamationCircleOutlined, UploadOutlined, EnvironmentOutlined, CloudUploadOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, ExclamationCircleOutlined, EnvironmentOutlined, CloudUploadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import type { UploadProps, RcFile } from 'antd/es/upload';
+import type { UploadProps } from 'antd/es/upload';
 import api from '../../services/axiosConfig';
 import { useNavigate } from 'react-router-dom';
 
@@ -239,7 +239,7 @@ const GISData: React.FC = () => {
         
         try {
           // 1. 获取MinIO预签名上传URL
-          const { upload_url, object_id, object_name } = await getUploadUrl(file.name);
+          const { upload_url, object_id } = await getUploadUrl(file.name);
           
           // 2. 直接上传文件到MinIO
           await uploadToMinio(upload_url, file);
@@ -330,8 +330,6 @@ const GISData: React.FC = () => {
   const customRequest = async ({ 
     file, 
     onSuccess, 
-    onError, 
-    onProgress 
   }: any) => {
     // 这里我们只是将文件添加到fileList，不做实际上传
     // 上传会在表单提交时进行

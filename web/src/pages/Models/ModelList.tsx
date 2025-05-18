@@ -1,4 +1,4 @@
-import { Table, Button, Space, Tag, Card, Modal, Popconfirm, Form, Input, Select, Progress, App, Image, Dropdown, Menu } from 'antd';
+import { Table, Button, Space, Tag, Card, Modal, Popconfirm, Form, Input, Progress, App, Image, Dropdown, Menu } from 'antd';
 import { PlusOutlined, DownloadOutlined, DeleteOutlined, EditOutlined, SwapOutlined, CheckCircleOutlined, LoadingOutlined, EyeOutlined, MoreOutlined } from '@ant-design/icons';
 import { useState, useEffect, useRef } from 'react';
 import modelAPI from '../../services/modelApi';
@@ -7,7 +7,7 @@ import { Upload } from 'antd';
 import type { UploadFile } from 'antd/es/upload/interface';
 
 
-const { Option } = Select;
+// const { Option } = Select;
 
 
 
@@ -50,10 +50,10 @@ const ModelList: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
   const [editTags, setEditTags] = useState<string[]>([]);
 
-  // 转换模态框状态
-  const [convertModalVisible, setConvertModalVisible] = useState(false);
-  const [converting, setConverting] = useState(false);
-  const [convertForm] = Form.useForm();
+  // // 转换模态框状态
+  // const [convertModalVisible, setConvertModalVisible] = useState(false);
+  // const [converting, setConverting] = useState(false);
+  // const [convertForm] = Form.useForm();
   
   // 转换状态查询
   const [conversionStatus, setConversionStatus] = useState<{[key: string]: {
@@ -225,7 +225,7 @@ const ModelList: React.FC = () => {
     setCurrentModel(model);
     // 直接执行转换为GLB格式
     try {
-      setConverting(true);
+      // setConverting(true);
       const response = await modelAPI.convertModel(model._id, 'GLB');
       const taskId = response.data.task_id;
       if (taskId) {
@@ -255,7 +255,7 @@ const ModelList: React.FC = () => {
       console.error('错误状态码:', error.response?.status);
       message.error(`转换模型失败: ${error.response?.data?.detail || error.message || '未知错误'}`);
     } finally {
-      setConverting(false);
+      // setConverting(false);
     }
   };
 

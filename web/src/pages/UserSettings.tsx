@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Form, Input, Button, Tabs, Modal, Space, App } from 'antd';
 import { authAPI } from '../services/api';
-import { useNavigate } from 'react-router-dom';
+// import { useNavigate } from 'react-router-dom';
 
-const { TabPane } = Tabs;
+// const { TabPane } = Tabs;
 
 const UserSettings: React.FC = () => {
   const { message } = App.useApp();
@@ -14,7 +14,7 @@ const UserSettings: React.FC = () => {
   const [hasPassword, setHasPassword] = useState<boolean | null>(null);
   const [showSetPasswordModal, setShowSetPasswordModal] = useState(false);
   const [setPasswordForm] = Form.useForm();
-  const navigate = useNavigate();
+  // const navigate = useNavigate();
 
   useEffect(() => {
     // 检查用户是否有密码

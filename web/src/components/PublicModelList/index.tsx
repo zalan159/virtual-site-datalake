@@ -22,11 +22,9 @@ import {
   DeleteOutlined, 
   EyeOutlined, 
   UploadOutlined,
-  SearchOutlined,
   DownloadOutlined,
   InboxOutlined
 } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
 import type { UploadFile } from 'antd/es/upload/interface';
 import * as publicModelsAPI from '../../services/publicModels';
 import type { PublicModelMetadata } from '../../services/publicModels';
@@ -39,7 +37,6 @@ interface PublicModelListProps {
 }
 
 const PublicModelList: React.FC<PublicModelListProps> = ({ isAdmin }) => {
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [models, setModels] = useState<PublicModelMetadata[]>([]);
   const [total, setTotal] = useState(0);
@@ -70,7 +67,7 @@ const PublicModelList: React.FC<PublicModelListProps> = ({ isAdmin }) => {
 
   // 分类和子分类状态管理
   const [categorySubcategoryMap, setCategorySubcategoryMap] = useState<{[key: string]: string[]}>({});
-  const [loadingSubcategories, setLoadingSubcategories] = useState<boolean>(false);
+  const [loadingSubcategories] = useState<boolean>(false);
 
   // 加载模型列表
   const loadModels = async () => {
@@ -153,7 +150,7 @@ const PublicModelList: React.FC<PublicModelListProps> = ({ isAdmin }) => {
   }, [selectedCategory, categorySubcategoryMap]);
 
   // 新增/编辑模型时的分类变化处理
-  const handleFormCategoryChange = (value: string, formInstance: any) => {
+  const handleFormCategoryChange = (_: string, formInstance: any) => {
     formInstance.setFieldsValue({ sub_category: undefined });
   };
 

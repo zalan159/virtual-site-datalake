@@ -37,29 +37,29 @@ interface ThreeDTilesTabProps {
   onThreeDTilesDragStart?: (e: React.DragEvent, item: ThreeDTilesItem) => void;
 }
 
-const formatFileSize = (size: number) => {
-  if (!size) return '未知';
-  if (size < 1024) {
-    return size + ' B';
-  } else if (size < 1024 * 1024) {
-    return (size / 1024).toFixed(2) + ' KB';
-  } else if (size < 1024 * 1024 * 1024) {
-    return (size / (1024 * 1024)).toFixed(2) + ' MB';
-  } else {
-    return (size / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
-  }
-};
+// const formatFileSize = (size: number) => {
+//   if (!size) return '未知';
+//   if (size < 1024) {
+//     return size + ' B';
+//   } else if (size < 1024 * 1024) {
+//     return (size / 1024).toFixed(2) + ' KB';
+//   } else if (size < 1024 * 1024 * 1024) {
+//     return (size / (1024 * 1024)).toFixed(2) + ' MB';
+//   } else {
+//     return (size / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+//   }
+// };
 
-const formatTime = (timeStr: string) => {
-  if (!timeStr) return '';
-  const date = new Date(timeStr);
-  return date.toLocaleString('zh-CN');
-};
+// const formatTime = (timeStr: string) => {
+//   if (!timeStr) return '';
+//   const date = new Date(timeStr);
+//   return date.toLocaleString('zh-CN');
+// };
 
-const formatCoordinate = (value: number | null) => {
-  if (value === null || value === undefined) return '未知';
-  return value.toFixed(6);
-};
+// const formatCoordinate = (value: number | null) => {
+//   if (value === null || value === undefined) return '未知';
+//   return value.toFixed(6);
+// };
 
 export const ThreeDTilesTab: React.FC<ThreeDTilesTabProps> = ({ onThreeDTilesDragStart }) => {
   const [data, setData] = useState<ThreeDTilesItem[]>([]);
