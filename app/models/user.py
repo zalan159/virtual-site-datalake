@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, constr, Field
-from typing import Optional, List
+from typing import Optional, List, Annotated
 from datetime import datetime
 from enum import Enum
 from bson import ObjectId
@@ -26,7 +26,7 @@ class UserRole(str, Enum):
 class UserBase(BaseModel):
     email: Optional[EmailStr] = None  # 邮箱选填
     username: str
-    phone: constr(regex=r'^1\d{10}$')  # 手机号必填，且必须符合格式
+    phone: Annotated[str, constr(pattern=r'^1\d{10}$')]  # 手机号必填，且必须符合格式
 
 class UserCreate(UserBase):
     password: str
