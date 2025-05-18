@@ -16,8 +16,9 @@ class PyObjectId(ObjectId):
         return ObjectId(v)
 
     @classmethod
-    def __modify_schema__(cls, field_schema):
-        field_schema.update(type="string")
+    def __get_pydantic_json_schema__(cls, core_schema, handler):
+        # 这里需要根据你的自定义 schema 逻辑迁移，参考 Pydantic v2 文档
+        return handler(core_schema)
 
 class FileShare(BaseModel):
     file_id: PyObjectId = Field(default_factory=PyObjectId)
@@ -68,7 +69,7 @@ class FileMetadata(BaseModel):
     conversion: Optional[FileConversion] = None  # 添加转换信息
 
     class Config:
-        allow_population_by_field_name = True
+        validate_by_name = True
         arbitrary_types_allowed = True
         json_encoders = {ObjectId: str}
 
@@ -89,6 +90,6 @@ class PublicModelMetadata(BaseModel):
     download_count: int = 0  # 下载次数
 
     class Config:
-        allow_population_by_field_name = True
+        validate_by_name = True
         arbitrary_types_allowed = True
         json_encoders = {ObjectId: str} 

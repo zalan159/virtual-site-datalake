@@ -9,6 +9,7 @@ import os
 import uuid
 import base64
 from PIL import Image
+from pydantic import BaseModel
 
 from app.models.user import UserInDB
 from app.models.file import PublicModelMetadata
@@ -26,8 +27,12 @@ def is_admin_user(current_user: UserInDB = Depends(get_current_active_user)):
     return current_user
 
 # 数据模型结构
-class PaginatedResponse(Dict[str, Any]):
-    pass
+class PaginatedResponse(BaseModel):
+    items: List[PublicModelMetadata]
+    total: int
+    page: int
+    size: int
+    pages: int
 
 @router.post("/upload", response_model=PublicModelMetadata)
 async def upload_public_model(
@@ -160,13 +165,13 @@ async def list_public_models(
             url = minio_client.presigned_get_object(PUBLIC_MODEL_BUCKET_NAME, model["file_path"])
             model["download_url"] = url
         
-        return {
-            "items": models,
-            "total": total_count,
-            "page": page,
-            "size": limit,
-            "pages": total_pages
-        }
+        return PaginatedResponse(
+            items=models,
+            total=total_count,
+            page=page,
+            size=limit,
+            pages=total_pages
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -316,14 +321,13 @@ async def search_public_models(
             url = minio_client.presigned_get_object(PUBLIC_MODEL_BUCKET_NAME, model["file_path"])
             model["download_url"] = url
             
-        return {
-            "items": models,
-            "total": total_count,
-            "page": page,
-            "size": limit,
-            "pages": total_pages,
-            "query": query
-        }
+        return PaginatedResponse(
+            items=models,
+            total=total_count,
+            page=page,
+            size=limit,
+            pages=total_pages
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -374,15 +378,13 @@ async def get_models_by_category(
             url = minio_client.presigned_get_object(PUBLIC_MODEL_BUCKET_NAME, model["file_path"])
             model["download_url"] = url
             
-        return {
-            "items": models,
-            "total": total_count,
-            "page": page,
-            "size": limit,
-            "pages": total_pages,
-            "category": category,
-            "sub_category": sub_category
-        }
+        return PaginatedResponse(
+            items=models,
+            total=total_count,
+            page=page,
+            size=limit,
+            pages=total_pages
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

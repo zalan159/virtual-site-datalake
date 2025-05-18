@@ -97,7 +97,7 @@ class FileConverter:
                             )
                             
                             # 存储到MongoDB
-                            await db.metadata.insert_one(metadata.dict())
+                            await db.metadata.insert_one(metadata.model_dump())
                         except Exception as e:
                             print(f"处理ProductOccurrence节点时出错: {str(e)}")
                             continue

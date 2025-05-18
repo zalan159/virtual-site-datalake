@@ -152,7 +152,7 @@ async def upload_file(
             "tags": []
         })
         if conversion:
-            metadata_dict["conversion"] = conversion.dict()
+            metadata_dict["conversion"] = conversion.model_dump()
         
         result = await db.files.insert_one(metadata_dict)
         metadata_dict["_id"] = result.inserted_id
@@ -305,7 +305,7 @@ async def share_file(
         raise HTTPException(status_code=403, detail="没有权限分享此文件")
     
     # 更新分享信息
-    share_info_dict = share_info.dict()
+    share_info_dict = share_info.model_dump()
     share_info_dict["updated_at"] = datetime.now()
     
     await db.files.update_one(
@@ -492,7 +492,7 @@ async def convert_file(
         
         await db.files.update_one(
             {"_id": ObjectId(file_id)},
-            {"$set": {"conversion": conversion.dict()}}
+            {"$set": {"conversion": conversion.model_dump()}}
         )
         
         # 启动任务管理器（如果尚未启动）

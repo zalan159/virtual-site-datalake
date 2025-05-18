@@ -37,7 +37,7 @@ async def register(user: UserCreate):
         )
     
     # 创建新用户
-    user_dict = user.dict()
+    user_dict = user.model_dump()
     user_dict["hashed_password"] = get_password_hash(user_dict.pop("password"))
     user_dict["id"] = str(ObjectId())
     

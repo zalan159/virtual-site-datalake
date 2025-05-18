@@ -57,7 +57,7 @@ async def get_broker(broker_id: str):
 @router.post("/brokers", response_model=BrokerConfig)
 async def create_broker(cfg: BrokerConfig):
     db = AsyncIOMotorClient(MONGO_URL)[MONGO_DB_NAME]
-    data = cfg.dict(by_alias=True, exclude_unset=True)
+    data = cfg.model_dump(by_alias=True, exclude_unset=True)
     
     # 强制初始化版本信息（去除 enabled 字段）
     data.update({
@@ -72,7 +72,7 @@ async def create_broker(cfg: BrokerConfig):
 @router.put("/brokers/{broker_id}", response_model=BrokerConfig)
 async def update_broker(broker_id: str, cfg: BrokerConfig):
     # 在更新前添加
-    if "version" in cfg.dict(exclude_unset=True):
+    if "version" in cfg.model_dump(exclude_unset=True):
         raise HTTPException(400, "版本号不能手动修改")
     
     db = AsyncIOMotorClient(MONGO_URL)[MONGO_DB_NAME]
@@ -83,7 +83,7 @@ async def update_broker(broker_id: str, cfg: BrokerConfig):
         raise HTTPException(status_code=404, detail="Broker配置不存在")
     
     # 构建更新操作
-    update_data = cfg.dict(exclude={'version', 'last_modified'})
+    update_data = cfg.model_dump(exclude={'version', 'last_modified'})
     update_data.update({
         "version": current.get("version", 0) + 1,
         "last_modified": time.time()

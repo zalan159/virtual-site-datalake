@@ -15,8 +15,9 @@ class PyObjectId(ObjectId):
         return ObjectId(v)
 
     @classmethod
-    def __modify_schema__(cls, field_schema):
-        field_schema.update(type="string")
+    def __get_pydantic_json_schema__(cls, core_schema, handler):
+        # 这里需要根据你的自定义 schema 逻辑迁移，参考 Pydantic v2 文档
+        return handler(core_schema)
 
 class StreamBase(BaseModel):
     name: str
@@ -42,6 +43,6 @@ class StreamInDB(StreamBase):
     create_time: datetime = Field(default_factory=datetime.utcnow)
 
     class Config:
-        allow_population_by_field_name = True
+        validate_by_name = True
         arbitrary_types_allowed = True
         json_encoders = {ObjectId: str} 

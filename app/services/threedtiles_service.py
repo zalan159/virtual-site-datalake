@@ -103,7 +103,7 @@ class ThreeDTilesService:
                 return {"status": "failed", "message": f"MinIO中未找到文件: {str(e)}"}
             
             # 创建数据库记录获取ID
-            threedtiles_dict = threedtiles_data.dict()
+            threedtiles_dict = threedtiles_data.model_dump()
             threedtiles_dict["created_at"] = datetime.utcnow()
             threedtiles_dict["updated_at"] = datetime.utcnow()
             threedtiles_dict["original_filename"] = filename
@@ -380,7 +380,7 @@ class ThreeDTilesService:
             )
             
         # 创建数据库记录获取ID
-        threedtiles_dict = threedtiles_data.dict()
+        threedtiles_dict = threedtiles_data.model_dump()
         threedtiles_dict["created_at"] = datetime.utcnow()
         threedtiles_dict["updated_at"] = datetime.utcnow()
         threedtiles_dict["original_filename"] = filename
@@ -520,7 +520,7 @@ class ThreeDTilesService:
             )
             
         # 创建数据库记录获取ID
-        threedtiles_dict = threedtiles_data.dict()
+        threedtiles_dict = threedtiles_data.model_dump()
         threedtiles_dict["created_at"] = datetime.utcnow()
         threedtiles_dict["updated_at"] = datetime.utcnow()
         threedtiles_dict["original_filename"] = file.filename
@@ -730,7 +730,7 @@ class ThreeDTilesService:
                 detail=f"ID为{tile_id}的3DTiles模型不存在"
             )
         
-        update_dict = {k: v for k, v in update_data.dict().items() if v is not None}
+        update_dict = {k: v for k, v in update_data.model_dump().items() if v is not None}
         if update_dict:
             update_dict["updated_at"] = datetime.utcnow()
             await self.collection.update_one(

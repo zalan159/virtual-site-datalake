@@ -122,7 +122,7 @@ async def load_configs(last_check: float = 0) -> Tuple[List[Dict[str, Any]], flo
             try:
                 if "_id" in doc and not isinstance(doc["_id"], str):
                     doc["_id"] = str(doc["_id"])
-                validated = BrokerConfig(**doc).dict()
+                validated = BrokerConfig(**doc).model_dump()
                 changed_cfgs.append(validated)
             except Exception as err:
                 logger.error("配置验证失败 (%s): %s", doc.get("_id", "?"), err)

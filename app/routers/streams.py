@@ -13,7 +13,7 @@ async def create_stream(
     stream: StreamCreate,
     current_user = Depends(get_current_user)
 ):
-    stream_dict = stream.dict()
+    stream_dict = stream.model_dump()
     stream_dict["create_time"] = datetime.utcnow()
     stream_dict["owner"] = current_user.username
     result = await db.streams.insert_one(stream_dict)
@@ -49,7 +49,7 @@ async def update_stream(
         raise HTTPException(status_code=404, detail="视频流不存在")
     
     # 只更新允许的字段，排除owner
-    update_data = stream.dict(exclude_unset=True, exclude={"owner"})
+    update_data = stream.model_dump(exclude_unset=True, exclude={"owner"})
     result = await db.streams.update_one(
         {"_id": ObjectId(stream_id), "owner": current_user.username},
         {"$set": update_data}

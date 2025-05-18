@@ -114,7 +114,7 @@ async def update_scene(scene_id: str, data: SceneUpdate, current_user: UserInDB 
     scene = Scene.nodes.get_or_none(uid=scene_id)
     if not scene:
         raise HTTPException(404, "场景不存在")
-    update_dict = data.dict(exclude_unset=True)
+    update_dict = data.model_dump(exclude_unset=True)
     # 不允许通过此接口更新preview_image和只读字段
     for field in ["preview_image", "created_at", "uid", "owner", "root"]:
         update_dict.pop(field, None)

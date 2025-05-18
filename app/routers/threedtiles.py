@@ -109,7 +109,7 @@ async def process_uploaded_file(
     
     # 打印日志: 查看threedtiles_data内容
     print(f"[DEBUG] 创建的threedtiles_data对象: {threedtiles_data}")
-    print(f"[DEBUG] threedtiles_data.dict()内容: {threedtiles_data.dict()}")
+    print(f"[DEBUG] threedtiles_data.model_dump()内容: {threedtiles_data.model_dump()}")
     
     try:
         # 检查文件存在性
@@ -129,7 +129,7 @@ async def process_uploaded_file(
         task_result = {
             "object_id": object_id,
             "filename": filename,
-            "threedtiles_data": threedtiles_data.dict()
+            "threedtiles_data": threedtiles_data.model_dump()
         }
         
         # 打印日志: 查看task_result内容
