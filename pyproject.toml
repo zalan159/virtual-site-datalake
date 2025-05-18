@@ -23,7 +23,7 @@ dependencies = [
   "requests==2.31.0",
   "aioredis==2.0.1",
   "aiomqtt==2.4.0",
-  "neomodel==5.4.5"
+  "neomodel==5.4.5",
   "pillow==11.2.1"
 ]
 
