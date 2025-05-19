@@ -31,6 +31,7 @@ services:
     environment:
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_SERVER_URL=http://YOUR_MINIO_PUBLIC_DOMAIN_OR_IP:YOUR_MINIO_PUBLIC_PORT
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"

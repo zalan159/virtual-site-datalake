@@ -33,7 +33,7 @@ async def create_scene(
 
 @router.get("/scenes", response_model=List[dict])
 async def list_scenes(current_user: UserInDB = Depends(get_current_active_user)):
-    scenes = Scene.nodes.all()
+    scenes = Scene.nodes.filter(owner=str(current_user.id))
     return [{
         "uid": s.uid,
         "name": s.name,
