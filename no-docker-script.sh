@@ -46,8 +46,9 @@ sudo chown -R "$(whoami)":"$(whoami)" "${INSTALL_BASE_DIR}"
 
 echo ""
 echo "--- 正在安装必要工具 (gnupg, curl, wget, psmisc, netcat-traditional) ---"
-sudo apt update
-sudo apt install -y gnupg curl wget psmisc netcat-traditional
+# Added -qq to apt install for quieter output during successful installs
+sudo apt update -qq
+sudo apt install -y -qq gnupg curl wget psmisc netcat-traditional
 if [ $? -ne 0 ]; then
     echo "错误：apt update 或安装必要工具失败，请检查网络和权限。"
     exit 1
@@ -58,13 +59,13 @@ echo ""
 echo "--- 1. 正在安装并配置 MongoDB (使用 ${MONGO_VERSION} 版本) ---"
 MONGO_REPO_URL="https://repo.mongodb.org/apt/ubuntu"
 MONGO_DISTRO="noble"
-MONGO_VERSION="8.0" # Explicitly set here, was missing in echo before
+MONGO_VERSION="8.0"
 
 curl -fsSL https://www.mongodb.org/static/pgp/server-${MONGO_VERSION}.asc | \
    sudo gpg --dearmor -o /usr/share/keyrings/mongodb-archive-keyring.gpg
 echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-archive-keyring.gpg ] ${MONGO_REPO_URL} ${MONGO_DISTRO}/mongodb-org/${MONGO_VERSION} multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-${MONGO_VERSION}.list > /dev/null
-sudo apt update
-sudo apt install -y mongodb-org || {
+sudo apt update -qq
+sudo apt install -y -qq mongodb-org || {
     echo "错误：MongoDB APT 安装失败。"
     exit 1
 }
@@ -77,11 +78,12 @@ sudo chown -R mongodb:mongodb "${DATA_BASE_DIR}/mongodb"
 if [ -f "/etc/mongod.conf" ]; then
     sudo mv /etc/mongod.conf /etc/mongod.conf.backup
 fi
+# Removed storage.journal.enabled as it's default in MongoDB 8.0 and caused errors.
 sudo bash -c "cat <<EOF > /etc/mongod.conf
 storage:
   dbPath: ${DATA_BASE_DIR}/mongodb
-  journal:
-    enabled: true
+  # journal: # Journaling is enabled by default in MongoDB 8.0
+  #   enabled: true 
 systemLog:
   destination: file
   logAppend: true
@@ -97,8 +99,8 @@ EOF"
 
 echo "正在启动 MongoDB..."
 nohup sudo mongod --config /etc/mongod.conf > "${DATA_BASE_DIR}/mongodb/mongod_stdout.log" 2>&1 &
-echo "等待 MongoDB 启动 (40 秒)... (如果持续失败，请检查 Docker 资源限制和 MongoDB 日志)"
-sleep 40
+echo "等待 MongoDB 启动 (30 秒)... (如果持续失败，请检查 Docker 资源限制和 MongoDB 日志)"
+sleep 30 # Reduced sleep slightly, main issue was config.
 
 echo "正在配置 MongoDB 用户和密码..."
 MONGO_SHELL_CMD=""
@@ -112,8 +114,8 @@ fi
 
 if [ -n "$MONGO_SHELL_CMD" ]; then
     COUNT=0
-    MAX_RETRIES=3 # Reduced retries to 3 as requested
-    RETRY_INTERVAL=5 # Slightly increased interval for each retry
+    MAX_RETRIES=3 
+    RETRY_INTERVAL=5 
     echo "等待 MongoDB 响应 (最多 ${MAX_RETRIES} 次尝试)..."
     while ! nc -z ${MONGO_HOST} ${MONGO_PORT} &> /dev/null && [ $COUNT -lt ${MAX_RETRIES} ]; do
         echo "  尝试 $((COUNT+1))/${MAX_RETRIES}... (检查端口 ${MONGO_HOST}:${MONGO_PORT})"
@@ -132,8 +134,6 @@ db.createUser({
 })
 quit()
 EOF
-        # Verify user creation by attempting a login (optional, can be complex)
-        # For now, we assume createUser is successful if no error is thrown by the shell.
         echo "MongoDB 用户 '${MONGO_USERNAME}' 配置尝试完成。"
         echo "请检查 MongoDB 日志 (${DATA_BASE_DIR}/mongodb/mongod.log 和 ${DATA_BASE_DIR}/mongodb/mongod_stdout.log) 确认用户创建成功。"
     else
@@ -179,7 +179,7 @@ echo "MinIO 配置完成。"
 # --- 3. 安装并配置 Redis ---
 echo ""
 echo "--- 3. 正在安装并配置 Redis ---"
-sudo apt install -y redis-server
+sudo apt install -y -qq redis-server
 
 sudo killall redis-server || true
 
@@ -282,9 +282,6 @@ if [ -f "${NEO4J_CYPHER_SHELL}" ]; then
 
     if [ $COUNT -lt ${MAX_RETRIES_NEO4J} ]; then
         echo "Neo4j Bolt 端口可用。正在尝试修改密码..."
-        # Use 'ALTER CURRENT USER' as suggested by Neo4j error message for forced password change
-        # Connect with initial credentials, then change password for the current user (neo4j)
-        # Execute against the 'system' database.
         echo "ALTER CURRENT USER SET PASSWORD FROM '${NEO4J_INITIAL_PASSWORD}' TO '${NEO4J_PASSWORD}'" | \
         "${NEO4J_CYPHER_SHELL}" -u "${NEO4J_USERNAME}" -p "${NEO4J_INITIAL_PASSWORD}" \
         --address "${NEO4J_HOST}:${NEO4J_PORT}" --format plain --database system
@@ -352,14 +349,20 @@ echo "  Username: ${NEO4J_USERNAME}"
 echo "  Password: ${NEO4J_PASSWORD} (如果密码修改成功)"
 echo "  Initial Password (if needed for manual change): ${NEO4J_INITIAL_PASSWORD}"
 echo "  Data Dir: ${NEO4J_DATA_DIR_CONF}"
-echo "  Logs Dir: ${NEO4J_LOGS_DIR_CONF}/neo4j.log" # Added neo4j.log to path
+echo "  Logs Dir: ${NEO4J_LOGS_DIR_CONF}/neo4j.log"
 echo "--------------------------------------------------"
 
 echo ""
 echo "请手动检查各个服务的状态和日志，确保它们已成功启动并配置正确。"
 echo "  MongoDB: ps aux | grep mongod; echo '--- stdout log ---'; tail -n 30 ${DATA_BASE_DIR}/mongodb/mongod_stdout.log; echo '--- main log ---'; tail -n 30 ${DATA_BASE_DIR}/mongodb/mongod.log"
 echo "  MinIO: ps aux | grep minio; tail -n 20 ${DATA_BASE_DIR}/minio.log"
-echo "  Redis: ps aux | grep redis-server; tail -n 20 ${DATA_BASE_DIR}/redis.log; redis-cli -p ${REDIS_PORT} $(if [ -n \"$REDIS_PASSWORD\" ]; then echo \"-a $REDIS_PASSWORD\"; fi) ping"
+# Corrected Redis ping command for summary
+REDIS_PING_CMD="redis-cli -p ${REDIS_PORT}"
+if [ -n "$REDIS_PASSWORD" ]; then
+    REDIS_PING_CMD="${REDIS_PING_CMD} -a \"${REDIS_PASSWORD}\""
+fi
+REDIS_PING_CMD="${REDIS_PING_CMD} ping"
+echo "  Redis: ps aux | grep redis-server; tail -n 20 ${DATA_BASE_DIR}/redis.log; ${REDIS_PING_CMD}"
 echo "  Neo4j: ${NEO4J_SYMLINK_DIR}/bin/neo4j status; tail -n 30 ${NEO4J_LOGS_DIR_CONF}/neo4j.log"
 echo ""
 echo "脚本执行完毕。"
