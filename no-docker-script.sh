@@ -71,14 +71,11 @@ sudo apt install -y mongodb-org || {
     exit 1
 }
 
-# 停止默认可能启动的服务，因为我们手动管理
-sudo service mongod stop || true
+# 停止可能由 apt 自动启动的服务 (使用 killall，因为 service/systemctl 不可用)
 sudo killall mongod || true
 
 # 创建 MongoDB 数据目录并设置权限
 sudo mkdir -p "${DATA_BASE_DIR}/mongodb"
-# chown 用户：组，这些在 MongoDB 包安装后通常会创建
-# 如果没有安装包，可能就没有 mongodb 用户/组，此时需要用 root 或当前用户
 sudo chown -R mongodb:mongodb "${DATA_BASE_DIR}/mongodb" || \
 sudo chown -R "$(whoami)":"$(whoami)" "${DATA_BASE_DIR}/mongodb" # 备用权限设置
 
@@ -95,10 +92,8 @@ sudo bash -c "cat <<EOF > /etc/mongod.conf
 # Where and how to store data.
 storage:
   dbPath: ${DATA_BASE_DIR}/mongodb
-  journal:
-    enabled: true
-#  engine:
-#  wiredTiger:
+  # journal: # journaling is enabled by default and this option is deprecated in recent versions
+  #   enabled: true 
 
 # Where to write logging data.
 systemLog:
@@ -135,9 +130,9 @@ security:
 #snmp:
 EOF"
 
-# 启动 MongoDB 守护进程
+# 启动 MongoDB 守护进程 (使用 nohup 绕过 systemd)
 echo "正在启动 MongoDB..."
-sudo mongod --config /etc/mongod.conf
+nohup sudo mongod --config /etc/mongod.conf > "${DATA_BASE_DIR}/mongodb/mongod_stdout.log" 2>&1 &
 sleep 5 # 等待 MongoDB 启动
 echo "MongoDB 启动完成。"
 
@@ -145,25 +140,25 @@ echo "MongoDB 启动完成。"
 echo "正在配置 MongoDB 用户和密码..."
 # 确保 mongosh 或 mongo shell 已安装
 if command -v mongosh &> /dev/null; then
-    MONGO_SHELL="mongosh --port ${MONGO_PORT}"
+    MONGO_SHELL_CMD="mongosh --port ${MONGO_PORT}"
 elif command -v mongo &> /dev/null; then
-    MONGO_SHELL="mongo --port ${MONGO_PORT}"
+    MONGO_SHELL_CMD="mongo --port ${MONGO_PORT}"
 else
     echo "警告：MongoDB shell (mongosh 或 mongo) 未找到。无法自动配置用户。请手动配置。"
-    MONGO_SHELL=""
+    MONGO_SHELL_CMD=""
 fi
 
-if [ -n "$MONGO_SHELL" ]; then
+if [ -n "$MONGO_SHELL_CMD" ]; then
     # 等待 MongoDB 接受连接
     COUNT=0
-    while ! ${MONGO_SHELL} --eval "db.adminCommand({ ping: 1 })" &> /dev/null && [ $COUNT -lt 10 ]; do
-        echo "等待 MongoDB 响应..."
+    while ! ${MONGO_SHELL_CMD} --eval "db.adminCommand({ ping: 1 })" &> /dev/null && [ $COUNT -lt 15 ]; do # 增加等待时间
+        echo "等待 MongoDB 响应... (尝试 ${COUNT}/15)"
         sleep 2
         COUNT=$((COUNT+1))
     done
 
-    if [ $COUNT -lt 10 ]; then
-        ${MONGO_SHELL} <<EOF
+    if [ $COUNT -lt 15 ]; then
+        ${MONGO_SHELL_CMD} <<EOF
 use admin
 db.createUser({
   user: "${MONGO_USERNAME}",
@@ -194,8 +189,7 @@ sudo mkdir -p "${MINIO_DATA_DIR}" "${MINIO_CONFIG_DIR}"
 sudo chown -R "$(whoami)":"$(whoami)" "${MINIO_DATA_DIR}" "${MINIO_CONFIG_DIR}"
 
 echo "正在启动 MinIO..."
-# 设置环境变量并启动 MinIO
-# 确保 MinIO_ROOT_USER 和 MINIO_ROOT_PASSWORD 环境变量在 MinIO 启动前设置
+# 设置环境变量并启动 MinIO (使用 nohup)
 export MINIO_ROOT_USER="${MINIO_USERNAME}"
 export MINIO_ROOT_PASSWORD="${MINIO_PASSWORD}"
 nohup "${MINIO_BIN_PATH}" server "${MINIO_DATA_DIR}" --config-dir "${MINIO_CONFIG_DIR}" \
@@ -214,8 +208,7 @@ echo ""
 echo "--- 3. 正在安装并配置 Redis ---"
 sudo apt install -y redis-server
 
-# 停止默认可能启动的服务
-sudo service redis-server stop || true
+# 停止可能由 apt 自动启动的服务 (使用 killall)
 sudo killall redis-server || true
 
 # 备份原始配置文件并创建自定义配置文件
@@ -228,7 +221,7 @@ bind 0.0.0.0
 port ${REDIS_PORT}
 timeout 0
 tcp-keepalive 300
-daemonize yes
+daemonize yes # 作为后台进程运行
 pidfile /var/run/redis-server.pid
 logfile \"${DATA_BASE_DIR}/redis.log\"
 databases ${REDIS_DB}
@@ -236,7 +229,7 @@ $(if [ -n "$REDIS_PASSWORD" ]; then echo "requirepass ${REDIS_PASSWORD}"; fi)
 # 其他默认配置保持不变
 EOF"
 
-# 启动 Redis 服务
+# 启动 Redis 服务 (直接执行二进制文件，因为 daemonize yes 会使其后台运行)
 echo "正在启动 Redis..."
 sudo redis-server "${REDIS_CONF_PATH}"
 sleep 3 # 等待 Redis 启动
@@ -303,14 +296,25 @@ echo "Neo4j 启动完成。"
 echo "正在修改 Neo4j 默认密码..."
 NEO4J_CYPHER_SHELL="${NEO4J_FINAL_DIR}/bin/cypher-shell"
 if [ -f "${NEO4J_CYPHER_SHELL}" ]; then
-    # 使用 cypher-shell 修改密码
-    # Neo4j 5.x 默认启用 TLS，但在这里可能需要禁用才能连接 localhost
-    # 尝试禁用加密连接
-    echo "CALL dbms.security.changeUserPassword('${NEO4J_PASSWORD}')" | "${NEO4J_CYPHER_SHELL}" -u neo4j -p neo4j --address "${NEO4J_HOST}:${NEO4J_PORT}" --encrypted=false
-    if [ $? -ne 0 ]; then
-        echo "警告：cypher-shell 自动修改密码失败，请手动更改 Neo4j 密码。"
-        echo "请尝试运行：${NEO4J_CYPHER_SHELL} -u neo4j -p neo4j --address ${NEO4J_HOST}:${NEO4J_PORT} --encrypted=false"
-        echo "然后执行：ALTER USER neo4j SET PASSWORD '${NEO4J_PASSWORD}';"
+    # 等待 Neo4j Bolt 端口可连接
+    echo "等待 Neo4j Bolt 端口 ${NEO4J_PORT} 可用..."
+    COUNT=0
+    while ! nc -z ${NEO4J_HOST} ${NEO4J_PORT} && [ $COUNT -lt 15 ]; do
+        sleep 2
+        COUNT=$((COUNT+1))
+    done
+
+    if [ $COUNT -lt 15 ]; then
+        # 使用 cypher-shell 修改密码
+        # 移除 --encrypted=false 参数
+        echo "CALL dbms.security.changeUserPassword('${NEO4J_PASSWORD}')" | "${NEO4J_CYPHER_SHELL}" -u neo4j -p neo4j --address "${NEO4J_HOST}:${NEO4J_PORT}"
+        if [ $? -ne 0 ]; then
+            echo "警告：cypher-shell 自动修改密码失败。请手动更改 Neo4j 密码。"
+            echo "请尝试运行：${NEO4J_CYPHER_DIR}/bin/cypher-shell -u neo4j -p neo4j --address ${NEO4J_HOST}:${NEO4J_PORT}"
+            echo "然后执行：ALTER USER neo4j SET PASSWORD '${NEO4J_PASSWORD}';"
+        fi
+    else
+        echo "错误：Neo4j Bolt 端口未在预期时间内开放，无法连接 cypher-shell。"
     fi
 else
     echo "警告：cypher-shell 未找到。无法自动更改 Neo4j 密码，请手动更改。"
