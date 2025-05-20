@@ -100,7 +100,7 @@ EOF"
 echo "正在启动 MongoDB..."
 nohup sudo mongod --config /etc/mongod.conf > "${DATA_BASE_DIR}/mongodb/mongod_stdout.log" 2>&1 &
 echo "等待 MongoDB 启动 (30 秒)... (如果持续失败，请检查 Docker 资源限制和 MongoDB 日志)"
-sleep 30 # Reduced sleep slightly, main issue was config.
+sleep 3 # Reduced sleep slightly, main issue was config.
 
 echo "正在配置 MongoDB 用户和密码..."
 MONGO_SHELL_CMD=""
@@ -170,7 +170,7 @@ export MINIO_ROOT_PASSWORD="${MINIO_PASSWORD}"
 nohup "${MINIO_BIN_PATH}" server "${MINIO_DATA_DIR}" --config-dir "${MINIO_CONFIG_DIR}" \
   --address "0.0.0.0:${MINIO_PORT}" > "${DATA_BASE_DIR}/minio.log" 2>&1 &
 echo "等待 MinIO 启动 (10 秒)..."
-sleep 10
+sleep 3
 
 echo "MinIO 已启动，日志在 ${DATA_BASE_DIR}/minio.log"
 echo "MinIO 配置完成。"
@@ -213,7 +213,7 @@ sudo chown redis:redis /var/run/redis
 echo "正在启动 Redis..."
 sudo redis-server "${REDIS_CONF_PATH}"
 echo "等待 Redis 启动 (5 秒)..."
-sleep 5
+sleep 2
 echo "Redis 启动完成。"
 
 
@@ -265,7 +265,7 @@ sudo sed -i "s|^#\(dbms\.security\.auth_enabled\s*=\s*true\)|\1|g" "${NEO4J_CONF
 echo "正在启动 Neo4j..."
 "${NEO4J_SYMLINK_DIR}/bin/neo4j" start
 echo "等待 Neo4j 启动并初始化 (30 秒)..."
-sleep 30
+sleep 5
 
 echo "正在修改 Neo4j 默认密码..."
 NEO4J_CYPHER_SHELL="${NEO4J_SYMLINK_DIR}/bin/cypher-shell"
