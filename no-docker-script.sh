@@ -58,7 +58,7 @@ echo ""
 echo "--- 1. 正在安装并配置 MongoDB (使用 ${MONGO_VERSION} 版本) ---"
 MONGO_REPO_URL="https://repo.mongodb.org/apt/ubuntu"
 MONGO_DISTRO="noble"
-MONGO_VERSION="8.0"
+MONGO_VERSION="8.0" # Explicitly set here, was missing in echo before
 
 curl -fsSL https://www.mongodb.org/static/pgp/server-${MONGO_VERSION}.asc | \
    sudo gpg --dearmor -o /usr/share/keyrings/mongodb-archive-keyring.gpg
@@ -69,7 +69,7 @@ sudo apt install -y mongodb-org || {
     exit 1
 }
 
-sudo killall mongod || true
+sudo killall mongod || true # Allow to fail if no process
 
 sudo mkdir -p "${DATA_BASE_DIR}/mongodb"
 sudo chown -R mongodb:mongodb "${DATA_BASE_DIR}/mongodb"
@@ -98,7 +98,7 @@ EOF"
 echo "正在启动 MongoDB..."
 nohup sudo mongod --config /etc/mongod.conf > "${DATA_BASE_DIR}/mongodb/mongod_stdout.log" 2>&1 &
 echo "等待 MongoDB 启动 (40 秒)... (如果持续失败，请检查 Docker 资源限制和 MongoDB 日志)"
-sleep 40 # Increased wait time
+sleep 40
 
 echo "正在配置 MongoDB 用户和密码..."
 MONGO_SHELL_CMD=""
@@ -112,11 +112,11 @@ fi
 
 if [ -n "$MONGO_SHELL_CMD" ]; then
     COUNT=0
-    MAX_RETRIES=20
-    RETRY_INTERVAL=3
-    echo "等待 MongoDB 响应..."
+    MAX_RETRIES=3 # Reduced retries to 3 as requested
+    RETRY_INTERVAL=5 # Slightly increased interval for each retry
+    echo "等待 MongoDB 响应 (最多 ${MAX_RETRIES} 次尝试)..."
     while ! nc -z ${MONGO_HOST} ${MONGO_PORT} &> /dev/null && [ $COUNT -lt ${MAX_RETRIES} ]; do
-        echo "  尝试 ${COUNT}/${MAX_RETRIES}... (检查端口 ${MONGO_HOST}:${MONGO_PORT})"
+        echo "  尝试 $((COUNT+1))/${MAX_RETRIES}... (检查端口 ${MONGO_HOST}:${MONGO_PORT})"
         sleep ${RETRY_INTERVAL}
         COUNT=$((COUNT+1))
     done
@@ -132,15 +132,22 @@ db.createUser({
 })
 quit()
 EOF
+        # Verify user creation by attempting a login (optional, can be complex)
+        # For now, we assume createUser is successful if no error is thrown by the shell.
         echo "MongoDB 用户 '${MONGO_USERNAME}' 配置尝试完成。"
         echo "请检查 MongoDB 日志 (${DATA_BASE_DIR}/mongodb/mongod.log 和 ${DATA_BASE_DIR}/mongodb/mongod_stdout.log) 确认用户创建成功。"
     else
         echo "错误：MongoDB 未在预期时间内启动或响应。"
-        echo "MongoDB 日志: ${DATA_BASE_DIR}/mongodb/mongod.log, ${DATA_BASE_DIR}/mongodb/mongod_stdout.log"
+        echo "MongoDB 日志内容如下:"
+        echo "--- mongod_stdout.log ---"
+        sudo cat "${DATA_BASE_DIR}/mongodb/mongod_stdout.log" || echo "  (stdout log not found or unreadable)"
+        echo "--- mongod.log ---"
+        sudo cat "${DATA_BASE_DIR}/mongodb/mongod.log" || echo "  (log not found or unreadable)"
+        echo "-----------------------"
         echo "请尝试手动运行: sudo -u mongodb mongod --config /etc/mongod.conf --auth (或 sudo mongod ...) 并查看输出。"
     fi
 else
-    echo "无法自动配置 MongoDB 用户。"
+    echo "无法自动配置 MongoDB 用户，因为 MongoDB shell 未找到。"
 fi
 
 
@@ -166,7 +173,7 @@ echo "等待 MinIO 启动 (10 秒)..."
 sleep 10
 
 echo "MinIO 已启动，日志在 ${DATA_BASE_DIR}/minio.log"
-echo "MinIO 配置完成。" # Connection details printed at the end
+echo "MinIO 配置完成。"
 
 
 # --- 3. 安装并配置 Redis ---
@@ -185,7 +192,6 @@ if [ -f "${REDIS_CONF_PATH}" ]; then
     sudo mv "${REDIS_CONF_PATH}" "${REDIS_CONF_PATH}.backup"
 fi
 
-# Corrected pidfile line: comment moved to its own line
 sudo bash -c "cat <<EOF > ${REDIS_CONF_PATH}
 bind 0.0.0.0
 port ${REDIS_PORT}
@@ -256,11 +262,6 @@ sudo sed -i "s|^#*\(server\.directories\.logs\s*=\s*\).*|\1${NEO4J_LOGS_DIR_ESCA
 sudo sed -i "s|^#*\(dbms\.security\.auth_enabled\s*=\s*\)false|\1true|g" "${NEO4J_CONF_FILE}"
 sudo sed -i "s|^#\(dbms\.security\.auth_enabled\s*=\s*true\)|\1|g" "${NEO4J_CONF_FILE}"
 
-# Optional: To avoid the initial password change prompt if you know the default.
-# For Neo4j 5, the default user is 'neo4j' with password 'neo4j', which must be changed on first login.
-# This script will change it via cypher-shell.
-# sudo sed -i "s|^#*\(initial\.default_password\s*=\s*\).*|\1${NEO4J_INITIAL_PASSWORD}|g" "${NEO4J_CONF_FILE}"
-
 echo "正在启动 Neo4j..."
 "${NEO4J_SYMLINK_DIR}/bin/neo4j" start
 echo "等待 Neo4j 启动并初始化 (30 秒)..."
@@ -274,30 +275,32 @@ if [ -f "${NEO4J_CYPHER_SHELL}" ]; then
     MAX_RETRIES_NEO4J=20
     RETRY_INTERVAL_NEO4J=3
     while ! nc -z "${NEO4J_HOST}" "${NEO4J_PORT}" &> /dev/null && [ $COUNT -lt ${MAX_RETRIES_NEO4J} ]; do
-        echo "  尝试连接 Neo4j Bolt 端口... (${COUNT}/${MAX_RETRIES_NEO4J})"
+        echo "  尝试连接 Neo4j Bolt 端口... ($((COUNT+1))/${MAX_RETRIES_NEO4J})"
         sleep ${RETRY_INTERVAL_NEO4J}
         COUNT=$((COUNT+1))
     done
 
     if [ $COUNT -lt ${MAX_RETRIES_NEO4J} ]; then
         echo "Neo4j Bolt 端口可用。正在尝试修改密码..."
-        # Connect with the default user 'neo4j' and its default initial password.
-        # Then, change the password of the 'neo4j' user (specified by ${NEO4J_USERNAME}) to ${NEO4J_PASSWORD}.
-        echo "ALTER USER ${NEO4J_USERNAME} SET PASSWORD '${NEO4J_PASSWORD}'" | \
+        # Use 'ALTER CURRENT USER' as suggested by Neo4j error message for forced password change
+        # Connect with initial credentials, then change password for the current user (neo4j)
+        # Execute against the 'system' database.
+        echo "ALTER CURRENT USER SET PASSWORD FROM '${NEO4J_INITIAL_PASSWORD}' TO '${NEO4J_PASSWORD}'" | \
         "${NEO4J_CYPHER_SHELL}" -u "${NEO4J_USERNAME}" -p "${NEO4J_INITIAL_PASSWORD}" \
-        --address "${NEO4J_HOST}:${NEO4J_PORT}" --format plain --database neo4j
+        --address "${NEO4J_HOST}:${NEO4J_PORT}" --format plain --database system
         
         if [ $? -eq 0 ]; then
-            echo "Neo4j 密码修改命令已发送。用户 '${NEO4J_USERNAME}' 新密码为 '${NEO4J_PASSWORD}'。"
+            echo "Neo4j 密码修改命令已成功发送。用户 '${NEO4J_USERNAME}' 新密码为 '${NEO4J_PASSWORD}'。"
         else
-            echo "警告：cypher-shell 自动修改密码可能失败 (退出码 $?)。"
-            echo "请检查 Neo4j 日志: ${NEO4J_LOGS_DIR_CONF}"
+            echo "警告：cypher-shell 自动修改密码失败 (退出码 $?)。"
+            echo "请检查 Neo4j 日志: ${NEO4J_LOGS_DIR_CONF}/neo4j.log"
             echo "您可能需要手动更改 Neo4j 密码。初始用户名: ${NEO4J_USERNAME}, 初始密码: ${NEO4J_INITIAL_PASSWORD}"
-            echo "命令: ALTER USER ${NEO4J_USERNAME} SET PASSWORD '${NEO4J_PASSWORD}';"
+            echo "命令: ALTER CURRENT USER SET PASSWORD FROM '${NEO4J_INITIAL_PASSWORD}' TO '${NEO4J_PASSWORD}';"
+            echo "  (在 cypher-shell 中执行，连接时使用初始密码，并指定 --database system)"
         fi
     else
         echo "错误：Neo4j Bolt 端口 (${NEO4J_HOST}:${NEO4J_PORT}) 未在预期时间内开放。"
-        echo "请检查 Neo4j 服务状态 (${NEO4J_SYMLINK_DIR}/bin/neo4j status) 和日志: ${NEO4J_LOGS_DIR_CONF}"
+        echo "请检查 Neo4j 服务状态 (${NEO4J_SYMLINK_DIR}/bin/neo4j status) 和日志: ${NEO4J_LOGS_DIR_CONF}/neo4j.log"
     fi
 else
     echo "警告：cypher-shell 未找到 (${NEO4J_CYPHER_SHELL})。无法自动更改 Neo4j 密码。"
@@ -349,12 +352,12 @@ echo "  Username: ${NEO4J_USERNAME}"
 echo "  Password: ${NEO4J_PASSWORD} (如果密码修改成功)"
 echo "  Initial Password (if needed for manual change): ${NEO4J_INITIAL_PASSWORD}"
 echo "  Data Dir: ${NEO4J_DATA_DIR_CONF}"
-echo "  Logs Dir: ${NEO4J_LOGS_DIR_CONF}"
+echo "  Logs Dir: ${NEO4J_LOGS_DIR_CONF}/neo4j.log" # Added neo4j.log to path
 echo "--------------------------------------------------"
 
 echo ""
 echo "请手动检查各个服务的状态和日志，确保它们已成功启动并配置正确。"
-echo "  MongoDB: ps aux | grep mongod; tail -n 30 ${DATA_BASE_DIR}/mongodb/mongod.log; tail -n 30 ${DATA_BASE_DIR}/mongodb/mongod_stdout.log"
+echo "  MongoDB: ps aux | grep mongod; echo '--- stdout log ---'; tail -n 30 ${DATA_BASE_DIR}/mongodb/mongod_stdout.log; echo '--- main log ---'; tail -n 30 ${DATA_BASE_DIR}/mongodb/mongod.log"
 echo "  MinIO: ps aux | grep minio; tail -n 20 ${DATA_BASE_DIR}/minio.log"
 echo "  Redis: ps aux | grep redis-server; tail -n 20 ${DATA_BASE_DIR}/redis.log; redis-cli -p ${REDIS_PORT} $(if [ -n \"$REDIS_PASSWORD\" ]; then echo \"-a $REDIS_PASSWORD\"; fi) ping"
 echo "  Neo4j: ${NEO4J_SYMLINK_DIR}/bin/neo4j status; tail -n 30 ${NEO4J_LOGS_DIR_CONF}/neo4j.log"
