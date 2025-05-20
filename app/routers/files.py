@@ -14,7 +14,14 @@ from PIL import Image
 from app.models.user import UserInDB
 from app.models.file import FileMetadata, FileShare, ConversionStatus, FileConversion
 from app.auth.utils import get_current_active_user, db
-from app.core.minio_client import minio_client, SOURCE_BUCKET_NAME, CONVERTED_BUCKET_NAME, PUBLIC_MODEL_BUCKET_NAME, PREVIEW_BUCKET_NAME
+from app.core.minio_client import (
+    minio_client,
+    minio_external_client,
+    SOURCE_BUCKET_NAME,
+    CONVERTED_BUCKET_NAME,
+    PUBLIC_MODEL_BUCKET_NAME,
+    PREVIEW_BUCKET_NAME,
+)
 from app.tasks.task_manager import TaskManager, TaskType
 from app.utils.mongo_init import get_mongo_url
 
@@ -200,12 +207,12 @@ async def get_file(
             raise HTTPException(status_code=404, detail="文件不存在")
         
         # 获取文件URL
-        url = minio_client.presigned_get_object(SOURCE_BUCKET_NAME, file_path)
+        url = minio_external_client.presigned_get_object(SOURCE_BUCKET_NAME, file_path)
         
         # 如果有转换后的文件，也获取其URL
         if file_metadata.get("conversion") and file_metadata["conversion"].get("output_file_path"):
-            converted_url = minio_client.presigned_get_object(
-                CONVERTED_BUCKET_NAME, 
+            converted_url = minio_external_client.presigned_get_object(
+                CONVERTED_BUCKET_NAME,
                 file_metadata["conversion"]["output_file_path"]
             )
             file_metadata["conversion"]["download_url"] = converted_url
@@ -357,7 +364,7 @@ async def get_download_url(
         if not file_path:
             raise HTTPException(status_code=500, detail="文件路径不存在")
             
-        url = minio_client.presigned_get_object(SOURCE_BUCKET_NAME, file_path)
+        url = minio_external_client.presigned_get_object(SOURCE_BUCKET_NAME, file_path)
         
         return {
             "file_id": str(file_metadata["_id"]),
@@ -398,7 +405,7 @@ async def get_converted_download_url(
         
         # 获取转换后文件的URL
         output_file_path = file_metadata["conversion"]["output_file_path"]
-        url = minio_client.presigned_get_object(CONVERTED_BUCKET_NAME, output_file_path)
+        url = minio_external_client.presigned_get_object(CONVERTED_BUCKET_NAME, output_file_path)
         
         return {
             "file_id": str(file_metadata["_id"]),
@@ -591,7 +598,7 @@ async def update_file_preview_image(
 
     # 5. 获取公开URL
     minio_scheme = "https" if os.getenv("MINIO_SECURE", "false").lower() == "true" else "http"
-    minio_host = f"{minio_scheme}://{os.getenv('MINIO_HOST')}:{os.getenv('MINIO_PORT')}"
+    minio_host = f"{minio_scheme}://{os.getenv('MINIO_EXTERNAL_HOST', os.getenv('MINIO_HOST'))}:{os.getenv('MINIO_PORT')}"
     preview_url = f"{minio_host}/{PREVIEW_BUCKET_NAME}/{filename}"
 
     # 6. 更新MongoDB

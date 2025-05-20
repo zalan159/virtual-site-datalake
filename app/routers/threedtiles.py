@@ -9,7 +9,7 @@ from datetime import timedelta
 from app.db.mongo_db import get_database
 from app.services.threedtiles_service import ThreeDTilesService
 from app.models.threedtiles import ThreeDTilesCreate, ThreeDTilesInDB, ThreeDTilesUpdate, ProcessStatus
-from app.core.minio_client import minio_client, THREEDTILES_BUCKET_NAME
+from app.core.minio_client import minio_client, minio_external_client, THREEDTILES_BUCKET_NAME
 from app.tasks import task_manager
 from app.tasks.task_manager import TaskType, TaskStatus, ConversionStep
 from app.auth.utils import get_current_active_user
@@ -39,7 +39,7 @@ async def get_upload_url(
     
     # 创建7天有效的预签名URL
     try:
-        upload_url = minio_client.presigned_put_object(
+        upload_url = minio_external_client.presigned_put_object(
             THREEDTILES_BUCKET_NAME,
             object_name,
             expires=timedelta(days=7)

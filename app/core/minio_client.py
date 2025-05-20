@@ -6,12 +6,23 @@ import json
 # 加载.env文件
 load_dotenv()
 
+# 外链 MinIO 主机
+MINIO_EXTERNAL_HOST = os.getenv("MINIO_EXTERNAL_HOST", os.getenv("MINIO_HOST"))
+
 # MinIO客户端
 minio_client = Minio(
     f"{os.getenv('MINIO_HOST')}:{os.getenv('MINIO_PORT')}",
     access_key=os.getenv('MINIO_USERNAME'),
     secret_key=os.getenv('MINIO_PASSWORD'),
     secure=False
+)
+
+# 专用于生成外链的 MinIO 客户端
+minio_external_client = Minio(
+    f"{MINIO_EXTERNAL_HOST}:{os.getenv('MINIO_PORT')}",
+    access_key=os.getenv('MINIO_USERNAME'),
+    secret_key=os.getenv('MINIO_PASSWORD'),
+    secure=os.getenv('MINIO_SECURE', 'false').lower() == 'true'
 )
 
 # 定义存储桶名称

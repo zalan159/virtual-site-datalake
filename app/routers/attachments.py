@@ -7,7 +7,11 @@ from bson import ObjectId
 from jose import JWTError, jwt
 from fastapi import status
 
-from app.core.minio_client import minio_client, ATTACHMENT_BUCKET_NAME
+from app.core.minio_client import (
+    minio_client,
+    minio_external_client,
+    ATTACHMENT_BUCKET_NAME,
+)
 from app.models.attachment import AttachmentCreate, AttachmentInDB
 from app.auth.utils import get_current_user, db, SECRET_KEY, ALGORITHM
 
@@ -107,7 +111,7 @@ async def download_attachment(
             raise HTTPException(status_code=404, detail="附件不存在")
         
         # 生成预签名URL（有效期1小时）
-        presigned_url = minio_client.presigned_get_object(
+        presigned_url = minio_external_client.presigned_get_object(
             ATTACHMENT_BUCKET_NAME,
             attachment["minio_path"],
             expires=timedelta(hours=1)

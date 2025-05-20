@@ -14,7 +14,12 @@ from pydantic import BaseModel
 from app.models.user import UserInDB
 from app.models.file import PublicModelMetadata
 from app.auth.utils import get_current_active_user, db
-from app.core.minio_client import minio_client, PUBLIC_MODEL_BUCKET_NAME, PREVIEW_BUCKET_NAME
+from app.core.minio_client import (
+    minio_client,
+    minio_external_client,
+    PUBLIC_MODEL_BUCKET_NAME,
+    PREVIEW_BUCKET_NAME,
+)
 
 router = APIRouter(
     tags=["公共模型"]
@@ -162,7 +167,7 @@ async def list_public_models(
         
         # 获取下载链接
         for model in models:
-            url = minio_client.presigned_get_object(PUBLIC_MODEL_BUCKET_NAME, model["file_path"])
+            url = minio_external_client.presigned_get_object(PUBLIC_MODEL_BUCKET_NAME, model["file_path"])
             model["download_url"] = url
         
         return PaginatedResponse(
@@ -318,7 +323,7 @@ async def search_public_models(
                 
         # 获取下载链接
         for model in models:
-            url = minio_client.presigned_get_object(PUBLIC_MODEL_BUCKET_NAME, model["file_path"])
+            url = minio_external_client.presigned_get_object(PUBLIC_MODEL_BUCKET_NAME, model["file_path"])
             model["download_url"] = url
             
         return PaginatedResponse(
@@ -375,7 +380,7 @@ async def get_models_by_category(
                 
         # 获取下载链接
         for model in models:
-            url = minio_client.presigned_get_object(PUBLIC_MODEL_BUCKET_NAME, model["file_path"])
+            url = minio_external_client.presigned_get_object(PUBLIC_MODEL_BUCKET_NAME, model["file_path"])
             model["download_url"] = url
             
         return PaginatedResponse(
@@ -406,7 +411,7 @@ async def get_public_model(file_id: str):
             file_metadata["created_by"] = str(file_metadata["created_by"])
             
         # 获取下载链接
-        url = minio_client.presigned_get_object(PUBLIC_MODEL_BUCKET_NAME, file_metadata["file_path"])
+        url = minio_external_client.presigned_get_object(PUBLIC_MODEL_BUCKET_NAME, file_metadata["file_path"])
         file_metadata["download_url"] = url
         
         return file_metadata
@@ -495,7 +500,7 @@ async def update_public_model(
             updated_file["created_by"] = str(updated_file["created_by"])
         
         # 获取下载链接
-        url = minio_client.presigned_get_object(PUBLIC_MODEL_BUCKET_NAME, updated_file["file_path"])
+        url = minio_external_client.presigned_get_object(PUBLIC_MODEL_BUCKET_NAME, updated_file["file_path"])
         updated_file["download_url"] = url
         
         return updated_file
@@ -521,8 +526,8 @@ async def record_download(file_id: str):
         )
         
         # 获取下载链接，使用timedelta而不是整数
-        url = minio_client.presigned_get_object(
-            PUBLIC_MODEL_BUCKET_NAME, 
+        url = minio_external_client.presigned_get_object(
+            PUBLIC_MODEL_BUCKET_NAME,
             file_info["file_path"],
             expires=timedelta(seconds=3600)  # 链接有效期1小时
         )
@@ -576,7 +581,7 @@ async def update_public_model_preview(
         
         # 获取公开URL
         minio_scheme = "https" if os.getenv("MINIO_SECURE", "false").lower() == "true" else "http"
-        minio_host = f"{minio_scheme}://{os.getenv('MINIO_HOST')}:{os.getenv('MINIO_PORT')}"
+        minio_host = f"{minio_scheme}://{os.getenv('MINIO_EXTERNAL_HOST', os.getenv('MINIO_HOST'))}:{os.getenv('MINIO_PORT')}"
         preview_url = f"{minio_host}/{PREVIEW_BUCKET_NAME}/{filename}"
         
         # 更新MongoDB
@@ -609,7 +614,7 @@ async def get_featured_models(limit: int = Query(10, ge=1, le=100, description="
                 
         # 添加下载链接
         for model in models:
-            url = minio_client.presigned_get_object(PUBLIC_MODEL_BUCKET_NAME, model["file_path"])
+            url = minio_external_client.presigned_get_object(PUBLIC_MODEL_BUCKET_NAME, model["file_path"])
             model["download_url"] = url
             
         return models
@@ -644,7 +649,7 @@ async def get_popular_models(
                 
         # 添加下载链接
         for model in models:
-            url = minio_client.presigned_get_object(PUBLIC_MODEL_BUCKET_NAME, model["file_path"])
+            url = minio_external_client.presigned_get_object(PUBLIC_MODEL_BUCKET_NAME, model["file_path"])
             model["download_url"] = url
             
         return models
@@ -679,7 +684,7 @@ async def get_latest_models(
                 
         # 添加下载链接
         for model in models:
-            url = minio_client.presigned_get_object(PUBLIC_MODEL_BUCKET_NAME, model["file_path"])
+            url = minio_external_client.presigned_get_object(PUBLIC_MODEL_BUCKET_NAME, model["file_path"])
             model["download_url"] = url
             
         return models

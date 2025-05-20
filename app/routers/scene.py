@@ -11,7 +11,7 @@ import base64
 from io import BytesIO
 from PIL import Image
 import uuid
-from app.core.minio_client import minio_client, PREVIEW_BUCKET_NAME
+from app.core.minio_client import minio_client, minio_external_client, PREVIEW_BUCKET_NAME
 import os
 
 router = APIRouter(tags=["scene"])
@@ -357,7 +357,7 @@ async def update_scene_preview_image(
 
     # 4. 获取公开URL
     minio_scheme = "https" if os.getenv("MINIO_SECURE", "false").lower() == "true" else "http"
-    minio_host = f"{minio_scheme}://{os.getenv('MINIO_HOST')}:{os.getenv('MINIO_PORT')}"
+    minio_host = f"{minio_scheme}://{os.getenv('MINIO_EXTERNAL_HOST', os.getenv('MINIO_HOST'))}:{os.getenv('MINIO_PORT')}"
     preview_url = f"{minio_host}/{PREVIEW_BUCKET_NAME}/{filename}"
 
     # 5. 更新scene
