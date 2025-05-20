@@ -6,7 +6,7 @@ from neomodel import (
 )
 from datetime import datetime
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 
 # ------------------------------------------------------------------------------
 #  关系类型（带属性的边）
@@ -115,3 +115,12 @@ class InstanceUpdate(BaseModel):
     iot_binds: Optional[list] = None
     video_binds: Optional[list] = None
     file_binds: Optional[list] = None
+
+# 单个实例的批量更新对象，用于批量更新操作
+class InstanceBatchItem(BaseModel):
+    id: str  # 实例的uid
+    transform: Optional[dict] = None  # 目前仅支持更新transform属性
+
+# 批量更新请求模型
+class BatchInstanceUpdate(BaseModel):
+    updates: List[InstanceBatchItem]  # 更新项目列表

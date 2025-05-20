@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { Button, Modal, Space, Spin, Tree, Typography, App as AntdApp } from 'antd';
 import { EyeOutlined, EyeInvisibleOutlined, AimOutlined, DeleteOutlined } from '@ant-design/icons';
 import * as Cesium from 'cesium';
@@ -6,6 +6,7 @@ import { SelectedModelInfo } from '../../hooks/useCesiumInteractions';
 // @ts-ignore
 import CesiumGizmo from '../../../cesium-gizmo/src/CesiumGizmo.js';
 import api from '../../services/axiosConfig';
+import { useCesiumGizmo } from '../../hooks/useCesiumGizmo';
 
 interface InstanceTreeProps {
   instanceTreeData: any[];
@@ -43,6 +44,26 @@ const InstanceTree: React.FC<InstanceTreeProps> = ({
   fetchInstanceTree
 }) => {
   const { message } = AntdApp.useApp();
+  
+  // 为了避免类型错误，直接实现清除和设置 gizmo 的函数
+  const clearGizmoSafely = useCallback(() => {
+    if (gizmoRef?.current) {
+      gizmoRef.current.destroy();
+      gizmoRef.current = null;
+    }
+  }, [gizmoRef]);
+  
+  const setupGizmoSafely = useCallback((primitive: Cesium.Model) => {
+    if (viewerRef?.current && gizmoRef) {
+      gizmoRef.current = new CesiumGizmo(viewerRef.current, {
+        item: primitive,
+        mode: CesiumGizmo.Mode.TRANSLATE,
+        onDragEnd: ({type, result}: {type: any, result: any}) => {
+          console.log('Gizmo drag end:', type, result);
+        }
+      });
+    }
+  }, [viewerRef, gizmoRef]);
 
   // 处理实例点击
   const handleInstanceSelect = (selectedKeys: React.Key[], info: any) => {
@@ -81,21 +102,10 @@ const InstanceTree: React.FC<InstanceTreeProps> = ({
             };
             
             // 清除之前的高亮和 gizmo
-            if (gizmoRef?.current) {
-              gizmoRef.current.destroy();
-              gizmoRef.current = null;
-            }
+            clearGizmoSafely();
             
             // 创建新的 gizmo
-            if (gizmoRef && viewerRef.current) {
-              gizmoRef.current = new CesiumGizmo(viewerRef.current, {
-                item: primitive,
-                mode: CesiumGizmo.Mode.TRANSLATE,
-                onDragEnd: ({type, result}: {type: any, result: any}) => {
-                  console.log('Gizmo drag end:', type, result);
-                }
-              });
-            }
+            setupGizmoSafely(primitive);
             
             // 设置选中模型的边缘高亮效果
             primitive.color = Cesium.Color.ORANGE.withAlpha(0.8);
@@ -130,6 +140,9 @@ const InstanceTree: React.FC<InstanceTreeProps> = ({
           }
         }
       }
+      
+      // 清除 gizmo
+      clearGizmoSafely();
     }
   };
 

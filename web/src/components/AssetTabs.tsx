@@ -100,10 +100,11 @@ const AssetCard: React.FC<AssetCardProps> = ({ id, name, previewImage, icon, onD
 interface ModelTabProps {
   models: ModelAsset[];
   loading: boolean;
-  onModelDragStart: (e: React.DragEvent, modelId: string) => void;
+  onModelDragStart: (e: React.DragEvent, modelId: string, generateMode: 'mouse' | 'origin') => void;
+  generateMode: 'mouse' | 'origin';
 }
 
-const ModelTab: React.FC<ModelTabProps> = ({ models, loading, onModelDragStart }) => {
+const ModelTab: React.FC<ModelTabProps> = ({ models, loading, onModelDragStart, generateMode }) => {
   return (
     <>
       {loading ? (
@@ -123,7 +124,7 @@ const ModelTab: React.FC<ModelTabProps> = ({ models, loading, onModelDragStart }
                   id={modelId}
                   name={modelName}
                   previewImage={model.preview_image}
-                  onDragStart={onModelDragStart}
+                  onDragStart={(e, id) => onModelDragStart(e, id, generateMode)}
                 />
               );
             })
@@ -146,9 +147,10 @@ interface PublicModelTabProps {
   onSubCategoryChange: (subCategory: string | undefined) => void;
   onTagChange: (tag: string | undefined) => void;
   onPageChange: (page: number, pageSize: number) => void;
-  onModelDragStart: (e: React.DragEvent, modelId: string) => void;
+  onModelDragStart: (e: React.DragEvent, modelId: string, generateMode: 'mouse' | 'origin') => void;
   page: number; 
   pageSize: number;
+  generateMode: 'mouse' | 'origin';
 }
 
 const PublicModelTab: React.FC<PublicModelTabProps> = ({
@@ -164,7 +166,8 @@ const PublicModelTab: React.FC<PublicModelTabProps> = ({
   onPageChange,
   onModelDragStart,
   page,
-  pageSize
+  pageSize,
+  generateMode
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string | undefined>();
   const [searchText, setSearchText] = useState('');
@@ -240,7 +243,7 @@ const PublicModelTab: React.FC<PublicModelTabProps> = ({
                   id={model._id}
                   name={model.filename}
                   previewImage={model.preview_image}
-                  onDragStart={onModelDragStart}
+                  onDragStart={(e, id) => onModelDragStart(e, id, generateMode)}
                 />
               ))}
             </div>
@@ -291,9 +294,9 @@ interface AssetTabsProps {
   models: ModelAsset[];
   loadingModels: boolean;
   materials: MaterialDefinition[];
-  onModelDragStart: (e: React.DragEvent, modelId: string) => void;
+  onModelDragStart: (e: React.DragEvent, modelId: string, generateMode: 'mouse' | 'origin') => void;
   onMaterialDragStart: (e: React.DragEvent, materialId: string) => void;
-  onPublicModelDragStart?: (e: React.DragEvent, modelId: string) => void;
+  onPublicModelDragStart?: (e: React.DragEvent, modelId: string, generateMode: 'mouse' | 'origin') => void;
   onThreeDTilesDragStart?: (e: React.DragEvent, item: any) => void;
 }
 
@@ -313,6 +316,9 @@ export const AssetTabs: React.FC<AssetTabsProps> = ({
     tag: undefined as string | undefined,
     search: undefined as string | undefined
   });
+
+  // 新增生成方式选项
+  const [generateMode, setGenerateMode] = useState<'mouse' | 'origin'>('mouse');
 
   // 使用公共模型hook
   const { 
@@ -344,11 +350,19 @@ export const AssetTabs: React.FC<AssetTabsProps> = ({
     setPublicModelOptions(prev => ({ ...prev, page, pageSize }));
   };
 
-  // 处理公共模型拖拽开始
-  const handlePublicModelDragStart = (e: React.DragEvent, modelId: string) => {
+  // 处理模型拖拽开始，增加generateMode参数
+  const handleModelDragStart = (e: React.DragEvent, modelId: string, mode: 'mouse' | 'origin') => {
+    e.dataTransfer.setData('modelId', modelId);
+    e.dataTransfer.setData('generateMode', mode);
+    onModelDragStart(e, modelId, mode);
+  };
+
+  // 处理公共模型拖拽开始，增加generateMode参数
+  const handlePublicModelDragStart = (e: React.DragEvent, modelId: string, mode: 'mouse' | 'origin') => {
     e.dataTransfer.setData('publicModelId', modelId);
+    e.dataTransfer.setData('generateMode', mode);
     if (onPublicModelDragStart) {
-      onPublicModelDragStart(e, modelId);
+      onPublicModelDragStart(e, modelId, mode);
     }
   };
 
@@ -360,7 +374,8 @@ export const AssetTabs: React.FC<AssetTabsProps> = ({
         <ModelTab 
           models={models}
           loading={loadingModels}
-          onModelDragStart={onModelDragStart}
+          onModelDragStart={handleModelDragStart}
+          generateMode={generateMode}
         />
       ),
     },
@@ -382,6 +397,7 @@ export const AssetTabs: React.FC<AssetTabsProps> = ({
           onModelDragStart={handlePublicModelDragStart}
           page={publicModelOptions.page}
           pageSize={publicModelOptions.pageSize}
+          generateMode={generateMode}
         />
       ),
     },
@@ -407,6 +423,22 @@ export const AssetTabs: React.FC<AssetTabsProps> = ({
     }
   ];
 
+  // 新增：tabBarExtraContent右上角生成方式选择
+  const [activeKey, setActiveKey] = useState('models');
+  const showGenerateMode = activeKey === 'models' || activeKey === 'publicModels';
+  const tabBarExtraContent = showGenerateMode ? (
+    <Select
+      size="small"
+      style={{ width: 120 }}
+      value={generateMode}
+      onChange={setGenerateMode}
+      options={[
+        { label: '跟随鼠标', value: 'mouse' },
+        { label: '原点生成', value: 'origin' },
+      ]}
+    />
+  ) : null;
+
   return (
     <Card
       style={{
@@ -423,8 +455,11 @@ export const AssetTabs: React.FC<AssetTabsProps> = ({
     >
       <Tabs
         defaultActiveKey="models"
+        activeKey={activeKey}
+        onChange={setActiveKey}
         style={{ flex: 1, padding: '0 16px' }}
         items={items}
+        tabBarExtraContent={tabBarExtraContent}
       />
     </Card>
   );

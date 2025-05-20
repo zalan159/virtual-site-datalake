@@ -150,6 +150,7 @@ export const useCesiumDragAndDrop = (
     const modelId = e.dataTransfer.getData('modelId');
     const publicModelId = e.dataTransfer.getData('publicModelId');
     const threeDTilesId = e.dataTransfer.getData('threeDTilesId');
+    const generateMode = e.dataTransfer.getData('generateMode') as 'mouse' | 'origin';
 
     if (materialId) {
       const rect = cesiumContainerRef.current.getBoundingClientRect();
@@ -170,15 +171,20 @@ export const useCesiumDragAndDrop = (
 
     // 获取放置位置的经纬度
     let lon = 113.2644, lat = 23.1291, height = 0; // 默认位置
-    const dropPositionCartesian = viewer.scene.camera.pickEllipsoid(
-      new Cartesian2(e.clientX - cesiumContainerRef.current.getBoundingClientRect().left, e.clientY - cesiumContainerRef.current.getBoundingClientRect().top),
-      viewer.scene.globe.ellipsoid
-    );
-
-    if (dropPositionCartesian) {
-      const cartographic = Cartographic.fromCartesian(dropPositionCartesian);
-      lon = CesiumMath.toDegrees(cartographic.longitude);
-      lat = CesiumMath.toDegrees(cartographic.latitude);
+    if (generateMode === 'origin' && sceneOrigin) {
+      lon = sceneOrigin.longitude;
+      lat = sceneOrigin.latitude;
+      height = sceneOrigin.height || 0;
+    } else {
+      const dropPositionCartesian = viewer.scene.camera.pickEllipsoid(
+        new Cartesian2(e.clientX - cesiumContainerRef.current.getBoundingClientRect().left, e.clientY - cesiumContainerRef.current.getBoundingClientRect().top),
+        viewer.scene.globe.ellipsoid
+      );
+      if (dropPositionCartesian) {
+        const cartographic = Cartographic.fromCartesian(dropPositionCartesian);
+        lon = CesiumMath.toDegrees(cartographic.longitude);
+        lat = CesiumMath.toDegrees(cartographic.latitude);
+      }
     }
 
     if (modelId) {

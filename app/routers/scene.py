@@ -6,7 +6,7 @@ from app.models.scene import Scene, Instance
 from bson import ObjectId
 from datetime import datetime
 from neomodel import db as neo_db
-from app.models.scene import SceneCreate, SceneUpdate, ScenePreviewUpdate, InstanceCreate, InstanceUpdate
+from app.models.scene import SceneCreate, SceneUpdate, ScenePreviewUpdate, InstanceCreate, InstanceUpdate, BatchInstanceUpdate
 import base64
 from io import BytesIO
 from PIL import Image
@@ -272,6 +272,39 @@ async def update_instance(instance_id: str, data: InstanceUpdate, current_user: 
         inst.file_binds = data.file_binds
     inst.save()
     return {"uid": inst.uid, "name": inst.name}
+
+# 添加批量更新实例属性的接口
+@router.post("/instances/batch-update", response_model=dict)
+async def batch_update_instances(
+    data: BatchInstanceUpdate,
+    current_user: UserInDB = Depends(get_current_active_user)
+):
+    """批量更新多个实例的属性，主要用于同时移动多个实例"""
+    results = {"success": [], "failed": []}
+    
+    # 使用事务处理批量更新，确保原子性
+    with neo_db.transaction:
+        for update in data.updates:
+            try:
+                inst = Instance.nodes.get_or_none(uid=update.id)
+                if not inst:
+                    results["failed"].append({"id": update.id, "reason": "实例不存在"})
+                    continue
+                
+                # 只更新transform属性
+                if update.transform:
+                    inst.transform = update.transform
+                    inst.save()
+                    results["success"].append(update.id)
+                else:
+                    results["failed"].append({"id": update.id, "reason": "没有提供transform属性"})
+            except Exception as e:
+                results["failed"].append({"id": update.id, "reason": str(e)})
+    
+    return {
+        "message": f"批量更新完成，成功: {len(results['success'])}，失败: {len(results['failed'])}",
+        "results": results
+    }
 
 @router.delete("/instances/{instance_id}", response_model=dict)
 async def delete_instance(instance_id: str, current_user: UserInDB = Depends(get_current_active_user)):

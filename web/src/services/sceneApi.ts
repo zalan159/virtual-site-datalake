@@ -93,6 +93,11 @@ export const updateInstanceProperties = (instanceId: string, data: Record<string
   return api.put(`/instances/${instanceId}`, data);
 };
 
+// 批量更新多个实例的属性
+export const updateInstancesProperties = (updates: Array<{id: string, transform: any}>) => {
+  return api.post(`/instances/batch-update`, { updates });
+};
+
 // 获取实例的绑定关系
 export const getInstanceBindings = (instanceId: string) => {
   return api.get(`/instances/${instanceId}/bindings`);

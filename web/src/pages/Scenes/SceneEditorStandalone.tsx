@@ -94,12 +94,13 @@ const SceneEditorStandalone: React.FC = () => {
   const [selectedModelInfo, setSelectedModelInfo] = useState<SelectedModelInfo | null>(null);
   
   // Cesium Interactions Hook
-  const { externalClearHighlight } = useCesiumInteractions(
+  const { externalClearHighlight, clearGizmo } = useCesiumInteractions(
     viewerRef,
     setSelectedModelInfo,
     gizmoRef,
     setSelectedInstanceId,
-    origin
+    origin,
+    sceneId
   );
 
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -154,12 +155,6 @@ const SceneEditorStandalone: React.FC = () => {
     resetDragLatLng();
     externalClearHighlight();
   };
-
-  // const clearSelectedModel = useCallback(() => {
-  //   // 清除选中的模型信息
-  //   setSelectedModelInfo(null);
-  //   clearGizmo();
-  // }, [clearGizmo]);
 
   const handleModelDragStart = (e: React.DragEvent, modelId: string) => {
     e.dataTransfer.setData('modelId', modelId);
