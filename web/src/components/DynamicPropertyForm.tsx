@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Input, InputNumber, Button, Spin, Typography, Image, Upload, Switch, Space, DatePicker, Row, Col, Collapse } from 'antd';
+import { Form, Input, InputNumber, Button, Spin, Typography, Image, Upload, Switch, Space, DatePicker, Row, Col, Collapse, Modal, Table, App as AntdApp } from 'antd';
 import { UploadOutlined, PlusOutlined, MinusCircleOutlined } from '@ant-design/icons';
 import type { UploadFile } from 'antd/es/upload/interface';
 import moment from 'moment';
+import type { ColumnsType } from 'antd/es/table';
+import { subscriptionAPI, UserTopicSubscription } from '../services/iotService';
+import { streamApi, Stream } from '../services/streamApi';
+import { attachmentApi, Attachment } from '../services/attachmentApi';
+import { updateInstanceProperties } from '../services/sceneApi';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -69,6 +74,12 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
   const [form] = Form.useForm();
   const [formValues, setFormValues] = useState<any>(data || {});
   const [saving, setSaving] = useState(false);
+  const { message } = AntdApp.useApp();
+
+  // binding modal state
+  const [bindModalType, setBindModalType] = useState<'iot' | 'video' | 'file' | null>(null);
+  const [bindList, setBindList] = useState<any[]>([]);
+  const [bindSelectedKeys, setBindSelectedKeys] = useState<string[]>([]);
 
   useEffect(() => {
     setFormValues(data || {});
@@ -100,6 +111,65 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
     const fakeUrl = 'https://example.com/fake-image-url.jpg';
     handleFieldChange(fieldName, fakeUrl);
     return fakeUrl; // 返回URL以便分组模式下使用
+  };
+
+  const openBindModal = async (type: 'iot' | 'video' | 'file') => {
+    try {
+      let list: any[] = [];
+      if (type === 'iot') {
+        const res = await subscriptionAPI.list();
+        list = res.data || [];
+        setBindSelectedKeys(formValues.iot_binds || []);
+      } else if (type === 'video') {
+        const data = await streamApi.getList();
+        list = data || [];
+        setBindSelectedKeys(formValues.video_binds || []);
+      } else if (type === 'file') {
+        const data = await attachmentApi.getList();
+        list = data || [];
+        setBindSelectedKeys(formValues.file_binds || []);
+      }
+      setBindList(list);
+      setBindModalType(type);
+    } catch (err) {
+      message.error('获取绑定数据失败');
+    }
+  };
+
+  const handleBindOk = async () => {
+    if (!bindModalType) return;
+    const field = bindModalType === 'iot' ? 'iot_binds' : bindModalType === 'video' ? 'video_binds' : 'file_binds';
+    try {
+      await updateInstanceProperties(entityId, { [field]: bindSelectedKeys });
+      handleFieldChange(field, bindSelectedKeys);
+      message.success('绑定成功');
+    } catch (err) {
+      message.error('绑定失败');
+    } finally {
+      setBindModalType(null);
+    }
+  };
+
+  const bindColumns = (): ColumnsType<any> => {
+    if (bindModalType === 'iot') {
+      return [
+        { title: '主题', dataIndex: 'topic' },
+        { title: 'ID', dataIndex: '_id' }
+      ];
+    }
+    if (bindModalType === 'video') {
+      return [
+        { title: '名称', dataIndex: 'name' },
+        { title: '协议', dataIndex: 'protocol' }
+      ];
+    }
+    if (bindModalType === 'file') {
+      return [
+        { title: '文件名', dataIndex: 'filename' },
+        { title: '扩展名', dataIndex: 'extension' }
+      ];
+    }
+    return [];
   };
 
   // 根据字段类型渲染不同的表单组件
@@ -269,6 +339,9 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
         }
         return renderGenericObjectField(fieldName, value, meta);
       case 'array':
+        if (['iot_binds', 'video_binds', 'file_binds'].includes(fieldName)) {
+          return renderBindingField(fieldName, value, meta);
+        }
         return renderArrayField(fieldName, value, meta);
       default:
         return (
@@ -549,6 +622,19 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
             }
           }}
         />
+      </Form.Item>
+    );
+  };
+
+  const renderBindingField = (fieldName: string, value: any[], meta: FieldMetadata) => {
+    const binds = value || [];
+    const type = fieldName === 'iot_binds' ? 'iot' : fieldName === 'video_binds' ? 'video' : 'file';
+    return (
+      <Form.Item label={meta.display_name} key={fieldName}>
+        <Space>
+          <Button onClick={() => openBindModal(type)}>绑定</Button>
+          <span>{binds.length ? `${binds.length}项` : '未绑定'}</span>
+        </Space>
       </Form.Item>
     );
   };
@@ -1040,7 +1126,9 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
                         );
                       }
                     case 'array':
-                      // 数组类型处理
+                      if (['iot_binds', 'video_binds', 'file_binds'].includes(fieldName)) {
+                        return renderBindingField(fieldName, value, meta);
+                      }
                       const arrayValue = value || [];
                       return (
                         <Form.Item label={meta.display_name} key={fieldName}>
@@ -1173,6 +1261,24 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
           ]}
         />
       )}
+      <Modal
+        title="选择绑定项"
+        open={!!bindModalType}
+        onOk={handleBindOk}
+        onCancel={() => setBindModalType(null)}
+        destroyOnClose
+      >
+        <Table
+          rowKey="_id"
+          dataSource={bindList}
+          columns={bindColumns()}
+          rowSelection={{
+            selectedRowKeys: bindSelectedKeys,
+            onChange: (keys) => setBindSelectedKeys(keys as string[]),
+          }}
+          pagination={false}
+        />
+      </Modal>
     </Spin>
   );
 };
