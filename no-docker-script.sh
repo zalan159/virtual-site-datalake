@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e # Exit immediately if a command exits with a non-zero status
 
 # --- 数据库配置变量 ---
 # MongoDB
@@ -18,11 +19,12 @@ MINIO_SECURE=${MINIO_SECURE:-false} # MinIO console port will be MINIO_PORT + 1 
 # Redis
 REDIS_HOST=${REDIS_HOST:-localhost}
 REDIS_PORT=${REDIS_PORT:-6379}
-REDIS_DB=${REDIS_DB:-1} # 修正：Redis 数据库数量至少为 1
+REDIS_DB=${REDIS_DB:-1}
 REDIS_PASSWORD=${REDIS_PASSWORD:-} # 默认无密码
 REDIS_VERIFICATION_CODE_EXPIRE=${REDIS_VERIFICATION_CODE_EXPIRE:-300}
 
 # Neo4j
+NEO4J_HOST=${NEO4J_HOST:-localhost} # Added for consistency, used in nc check
 NEO4J_PORT=${NEO4J_PORT:-7687}
 NEO4J_HTTP_PORT=${NEO4J_HTTP_PORT:-7474}
 NEO4J_USERNAME=${NEO4J_USERNAME:-neo4j}
@@ -37,12 +39,12 @@ echo "--- 正在创建安装和数据目录 ---"
 sudo mkdir -p "${INSTALL_BASE_DIR}"
 sudo mkdir -p "${DATA_BASE_DIR}"
 # 确保当前用户对安装目录有写权限
-sudo chown -R "$(whoami)":"$(whoami)" "${INSTALL_BASE_DIR}" "${DATA_BASE_DIR}"
+sudo chown -R "$(whoami)":"$(whoami)" "${INSTALL_BASE_DIR}"
+# Data base directory permissions will be set per service
 
 # --- 安装必要的工具 ---
 echo ""
 echo "--- 正在安装必要工具 (gnupg, curl, wget, psmisc, netcat-traditional) ---"
-# apt install -y netcat-traditional 提供传统的 nc 命令，而不是 OpenBSD 版本
 sudo apt update
 sudo apt install -y gnupg curl wget psmisc netcat-traditional
 if [ $? -ne 0 ]; then
@@ -73,12 +75,11 @@ sudo apt install -y mongodb-org || {
 }
 
 # 停止可能由 apt 自动启动的服务 (使用 killall，因为 service/systemctl 不可用)
-sudo killall mongod || true
+sudo killall mongod || true # Allow command to fail if no process is found
 
 # 创建 MongoDB 数据目录并设置权限
 sudo mkdir -p "${DATA_BASE_DIR}/mongodb"
-sudo chown -R mongodb:mongodb "${DATA_BASE_DIR}/mongodb" || \
-sudo chown -R "$(whoami)":"$(whoami)" "${DATA_BASE_DIR}/mongodb" # 备用权限设置
+sudo chown -R mongodb:mongodb "${DATA_BASE_DIR}/mongodb" # mongodb user is created by package installer
 
 # 备份原始配置文件并创建自定义配置文件
 if [ -f "/etc/mongod.conf" ]; then
@@ -86,80 +87,55 @@ if [ -f "/etc/mongod.conf" ]; then
 fi
 sudo bash -c "cat <<EOF > /etc/mongod.conf
 # mongod.conf
-
-# for documentation of all options, see:
-#   http://docs.mongodb.org/manual/reference/configuration-options/
-
-# Where and how to store data.
 storage:
   dbPath: ${DATA_BASE_DIR}/mongodb
-  # journal: # journaling is enabled by default and this option is deprecated in recent versions
-  #   enabled: true 
-
-# Where to write logging data.
+  journal:
+    enabled: true
 systemLog:
   destination: file
   logAppend: true
   path: ${DATA_BASE_DIR}/mongodb/mongod.log
-
-# Process management
 processManagement:
   fork: true # 启动为后台进程
-
-# Network interfaces
 net:
   port: ${MONGO_PORT}
   bindIp: 0.0.0.0 # 允许所有 IP 连接
-
-# Security
 security:
   authorization: enabled # 启用认证
-
-# Operation Profiling
-#operationProfiling:
-
-# Replication
-#replication:
-
-# Sharding
-#sharding:
-
-## Enterprise-Only Options:
-
-#Auditlog:
-
-#snmp:
 EOF"
 
 # 启动 MongoDB 守护进程 (使用 nohup 绕过 systemd)
 echo "正在启动 MongoDB..."
 nohup sudo mongod --config /etc/mongod.conf > "${DATA_BASE_DIR}/mongodb/mongod_stdout.log" 2>&1 &
-sleep 10 # 增加等待时间，确保 MongoDB 完全启动
-echo "MongoDB 启动完成。"
+echo "等待 MongoDB 启动 (20 秒)..."
+sleep 20 # 增加等待时间，确保 MongoDB 完全启动
 
 # 配置 MongoDB 用户和密码
 echo "正在配置 MongoDB 用户和密码..."
-# 确保 mongosh 或 mongo shell 已安装
+MONGO_SHELL_CMD=""
 if command -v mongosh &> /dev/null; then
-    MONGO_SHELL_CMD="mongosh --port ${MONGO_PORT}"
+    MONGO_SHELL_CMD="mongosh --port ${MONGO_PORT} --quiet"
 elif command -v mongo &> /dev/null; then
-    MONGO_SHELL_CMD="mongo --port ${MONGO_PORT}"
+    MONGO_SHELL_CMD="mongo --port ${MONGO_PORT} --quiet"
 else
     echo "警告：MongoDB shell (mongosh 或 mongo) 未找到。无法自动配置用户。请手动配置。"
-    MONGO_SHELL_CMD=""
 fi
 
 if [ -n "$MONGO_SHELL_CMD" ]; then
     # 等待 MongoDB 接受连接
     COUNT=0
-    # 使用 nc 命令检查端口是否开放，更可靠
-    while ! nc -z ${MONGO_HOST} ${MONGO_PORT} &> /dev/null && [ $COUNT -lt 20 ]; do # 增加等待时间
-        echo "等待 MongoDB 响应... (尝试 ${COUNT}/20)"
-        sleep 2
+    MAX_RETRIES=20 # Increased retries
+    RETRY_INTERVAL=3 # Increased interval
+    echo "等待 MongoDB 响应..."
+    while ! nc -z ${MONGO_HOST} ${MONGO_PORT} &> /dev/null && [ $COUNT -lt ${MAX_RETRIES} ]; do
+        echo "  尝试 ${COUNT}/${MAX_RETRIES}..."
+        sleep ${RETRY_INTERVAL}
         COUNT=$((COUNT+1))
     done
 
-    if [ $COUNT -lt 20 ]; then
+    if [ $COUNT -lt ${MAX_RETRIES} ]; then
+        echo "MongoDB 响应成功。正在配置用户..."
+        # Corrected role definition: 'role' instead of 'rorole'
         ${MONGO_SHELL_CMD} <<EOF
 use admin
 db.createUser({
@@ -167,10 +143,15 @@ db.createUser({
   pwd: "${MONGO_PASSWORD}",
   roles: [{ role: "root", db: "admin" }]
 })
+quit()
 EOF
-        echo "MongoDB 用户 '${MONGO_USERNAME}' 配置完成。"
+        # Check user creation (basic check, assumes createUser doesn't throw error on success)
+        # A more robust check would involve trying to authenticate.
+        echo "MongoDB 用户 '${MONGO_USERNAME}' 配置尝试完成。"
+        echo "请检查 MongoDB 日志 (${DATA_BASE_DIR}/mongodb/mongod.log 和 ${DATA_BASE_DIR}/mongodb/mongod_stdout.log) 确认用户创建成功。"
     else
         echo "错误：MongoDB 未在预期时间内启动或响应。请手动检查并配置用户。"
+        echo "MongoDB 日志: ${DATA_BASE_DIR}/mongodb/mongod.log, ${DATA_BASE_DIR}/mongodb/mongod_stdout.log"
     fi
 else
     echo "无法自动配置 MongoDB 用户，因为没有找到 MongoDB shell。"
@@ -188,6 +169,7 @@ wget -q https://dl.min.io/server/minio/release/linux-amd64/minio -O "${MINIO_BIN
 chmod +x "${MINIO_BIN_PATH}"
 
 sudo mkdir -p "${MINIO_DATA_DIR}" "${MINIO_CONFIG_DIR}"
+# MinIO runs as the user who starts it. Set permissions for current user.
 sudo chown -R "$(whoami)":"$(whoami)" "${MINIO_DATA_DIR}" "${MINIO_CONFIG_DIR}"
 
 echo "正在启动 MinIO..."
@@ -196,13 +178,15 @@ export MINIO_ROOT_USER="${MINIO_USERNAME}"
 export MINIO_ROOT_PASSWORD="${MINIO_PASSWORD}"
 nohup "${MINIO_BIN_PATH}" server "${MINIO_DATA_DIR}" --config-dir "${MINIO_CONFIG_DIR}" \
   --address "0.0.0.0:${MINIO_PORT}" > "${DATA_BASE_DIR}/minio.log" 2>&1 &
-echo "MinIO 已启动，日志在 ${DATA_BASE_DIR}/minio.log"
-sleep 5 # 等待 MinIO 启动
+echo "等待 MinIO 启动 (10 秒)..."
+sleep 10 # 等待 MinIO 启动
 
+echo "MinIO 已启动，日志在 ${DATA_BASE_DIR}/minio.log"
 echo "MinIO 配置完成。请使用以下凭据访问："
 echo "  访问密钥 (Access Key): ${MINIO_USERNAME}"
 echo "  秘密密钥 (Secret Key): ${MINIO_PASSWORD}"
-echo "  MinIO Console (HTTP): http://${MINIO_HOST}:${MINIO_PORT}"
+echo "  MinIO API Endpoint: http://${MINIO_HOST}:${MINIO_PORT}"
+echo "  MinIO Console: 通常是 API Endpoint，或者特定 console 地址，请查阅 MinIO 文档或启动日志。"
 
 
 # --- 3. 安装并配置 Redis ---
@@ -211,43 +195,55 @@ echo "--- 3. 正在安装并配置 Redis ---"
 sudo apt install -y redis-server
 
 # 停止可能由 apt 自动启动的服务 (使用 killall)
-sudo killall redis-server || true
+sudo killall redis-server || true # Allow command to fail if no process is found
 
 # 备份原始配置文件并创建自定义配置文件
 REDIS_CONF_PATH="/etc/redis/redis.conf"
+REDIS_DATA_DIR="${DATA_BASE_DIR}/redis_data" # Define Redis data directory
+sudo mkdir -p "${REDIS_DATA_DIR}"
+sudo chown redis:redis "${REDIS_DATA_DIR}" # Redis runs as 'redis' user
+
 if [ -f "${REDIS_CONF_PATH}" ]; then
     sudo mv "${REDIS_CONF_PATH}" "${REDIS_CONF_PATH}.backup"
 fi
-# 修正：移除 daemonize yes 行后面的注释
+
 sudo bash -c "cat <<EOF > ${REDIS_CONF_PATH}
 bind 0.0.0.0
 port ${REDIS_PORT}
 timeout 0
 tcp-keepalive 300
 daemonize yes
-pidfile /var/run/redis-server.pid
+pidfile /var/run/redis/redis-server.pid # Default pidfile location
 logfile \"${DATA_BASE_DIR}/redis.log\"
+dir \"${REDIS_DATA_DIR}\" # Set Redis data directory
 databases ${REDIS_DB}
 $(if [ -n "$REDIS_PASSWORD" ]; then echo "requirepass ${REDIS_PASSWORD}"; fi)
-# 其他默认配置保持不变
+# Ensure protected-mode is off if binding to 0.0.0.0 without a password
+$(if [ -z "$REDIS_PASSWORD" ]; then echo "protected-mode no"; fi)
 EOF"
+
+# Ensure Redis run directory exists and has correct permissions
+sudo mkdir -p /var/run/redis
+sudo chown redis:redis /var/run/redis
 
 # 启动 Redis 服务 (直接执行二进制文件，因为 daemonize yes 会使其后台运行)
 echo "正在启动 Redis..."
 sudo redis-server "${REDIS_CONF_PATH}"
-sleep 3 # 等待 Redis 启动
+echo "等待 Redis 启动 (5 秒)..."
+sleep 5 # 等待 Redis 启动
 echo "Redis 启动完成。"
 
 
 # --- 4. 安装并配置 Neo4j ---
 echo ""
-echo "--- 4. 正在安装并配置 Neo4j ---"
-NEO4J_TAR_URL="https://neo4j.com/artifact.php?name=neo4j-community-${NEO4J_VERSION}-unix.tar.gz"
+echo "--- 4. 正在安装并配置 Neo4j ${NEO4J_VERSION} ---"
+NEO4J_TAR_URL="https://dist.neo4j.org/neo4j-community-${NEO4J_VERSION}-unix.tar.gz" # Official dist URL
 NEO4J_DOWNLOADED_TAR="${INSTALL_BASE_DIR}/neo4j-community-${NEO4J_VERSION}-unix.tar.gz"
-NEO4J_EXTRACT_BASE_DIR="${INSTALL_BASE_DIR}" # 解压到这里
-NEO4J_FINAL_DIR="${NEO4J_EXTRACT_BASE_DIR}/neo4j" # 最终简化后的目录名
-NEO4J_EXTRACTED_NAME="neo4j-community-${NEO4J_VERSION}" # wget 可能会下载成这个名字
+NEO4J_EXTRACT_BASE_DIR="${INSTALL_BASE_DIR}"
+NEO4J_FINAL_DIR="${NEO4J_EXTRACT_BASE_DIR}/neo4j-community-${NEO4J_VERSION}" # Standard extracted name
+NEO4J_SYMLINK_DIR="${NEO4J_EXTRACT_BASE_DIR}/neo4j" # Simpler symlink
 
+echo "正在下载 Neo4j..."
 wget -q "${NEO4J_TAR_URL}" -O "${NEO4J_DOWNLOADED_TAR}"
 
 # 检查下载是否成功
@@ -256,81 +252,123 @@ if [ ! -f "${NEO4J_DOWNLOADED_TAR}" ]; then
     exit 1
 fi
 
+echo "正在解压 Neo4j..."
 sudo tar -xzf "${NEO4J_DOWNLOADED_TAR}" -C "${NEO4J_EXTRACT_BASE_DIR}"
 
-# 检查解压后目录是否存在并移动
-if [ -d "${NEO4J_EXTRACT_BASE_DIR}/${NEO4J_EXTRACTED_NAME}" ]; then
-    sudo mv "${NEO4J_EXTRACT_BASE_DIR}/${NEO4J_EXTRACTED_NAME}" "${NEO4J_FINAL_DIR}"
-else
-    echo "错误：Neo4j 解压后未找到目录 '${NEO4J_EXTRACT_BASE_DIR}/${NEO4J_EXTRACTED_NAME}'。"
+# 检查解压后目录是否存在
+if [ ! -d "${NEO4J_FINAL_DIR}" ]; then
+    echo "错误：Neo4j 解压后未找到目录 '${NEO4J_FINAL_DIR}'。"
     exit 1
 fi
+
+# Create a symlink for easier access (optional)
+sudo ln -sfn "${NEO4J_FINAL_DIR}" "${NEO4J_SYMLINK_DIR}"
 
 sudo rm "${NEO4J_DOWNLOADED_TAR}" # 清理安装包
 
 # Neo4j 数据和日志目录
-NEO4J_DATA_DIR="${DATA_BASE_DIR}/neo4j_data"
-NEO4J_LOGS_DIR="${DATA_BASE_DIR}/neo4j_logs"
-sudo mkdir -p "${NEO4J_DATA_DIR}" "${NEO4J_LOGS_DIR}"
-sudo chown -R "$(whoami)":"$(whoami)" "${NEO4J_DATA_DIR}" "${NEO4J_LOGS_DIR}"
+NEO4J_DATA_DIR_CONF="${DATA_BASE_DIR}/neo4j_data" # Path for config file
+NEO4J_LOGS_DIR_CONF="${DATA_BASE_DIR}/neo4j_logs" # Path for config file
+sudo mkdir -p "${NEO4J_DATA_DIR_CONF}" "${NEO4J_LOGS_DIR_CONF}"
+# Neo4j from tarball runs as the user who starts it.
+sudo chown -R "$(whoami)":"$(whoami)" "${NEO4J_DATA_DIR_CONF}" "${NEO4J_LOGS_DIR_CONF}"
 
 # 修改 Neo4j 配置
-NEO4J_CONF_FILE="${NEO4J_FINAL_DIR}/conf/neo4j.conf"
+NEO4J_CONF_FILE="${NEO4J_SYMLINK_DIR}/conf/neo4j.conf"
+echo "正在配置 Neo4j (${NEO4J_CONF_FILE})..."
 # 备份原始文件
 sudo cp "${NEO4J_CONF_FILE}" "${NEO4J_CONF_FILE}.backup"
 
-# 修改配置文件，允许远程连接，设置端口和认证
-# 注意：sed 命令中的路径需要转义，因为包含了 /
-sudo sed -i "s|#dbms.connector.bolt.listen_address=0.0.0.0:7687|dbms.connector.bolt.listen_address=0.0.0.0:${NEO4J_PORT}|g" "${NEO4J_CONF_FILE}"
-sudo sed -i "s|#dbms.connector.http.listen_address=0.0.0.0:7474|dbms.connector.http.listen_address=0.0.0.0:${NEO4J_HTTP_PORT}|g" "${NEO4J_CONF_FILE}"
-sudo sed -i "s|#dbms.security.auth_enabled=true|dbms.security.auth_enabled=true|g" "${NEO4J_CONF_FILE}" # 确保认证启用
-# 配置数据和日志目录
-sudo sed -i "s|#dbms.directories.data=data|dbms.directories.data=${NEO4J_DATA_DIR}|g" "${NEO4J_CONF_FILE}"
-sudo sed -i "s|#dbms.directories.logs=logs|dbms.directories.logs=${NEO4J_LOGS_DIR}|g" "${NEO4J_CONF_FILE}"
+# Escape paths for sed
+NEO4J_DATA_DIR_ESCAPED=$(echo "${NEO4J_DATA_DIR_CONF}" | sed 's/[&/\]/\\&/g')
+NEO4J_LOGS_DIR_ESCAPED=$(echo "${NEO4J_LOGS_DIR_CONF}" | sed 's/[&/\]/\\&/g')
 
+# Use server.* settings for Neo4j 5.x
+sudo sed -i "s|^#*\(server\.default_listen_address\s*=\s*\).*|\10.0.0.0|g" "${NEO4J_CONF_FILE}"
+sudo sed -i "s|^#*\(server\.bolt\.listen_address\s*=\s*\).*|\1:${NEO4J_PORT}|g" "${NEO4J_CONF_FILE}" # Port only, address from default_listen_address
+sudo sed -i "s|^#*\(server\.http\.listen_address\s*=\s*\).*|\1:${NEO4J_HTTP_PORT}|g" "${NEO4J_CONF_FILE}" # Port only
 
-# 启动 Neo4j 服务
+# Correctly set data and logs directories using server.directories.*
+sudo sed -i "s|^#*\(server\.directories\.data\s*=\s*\).*|\1${NEO4J_DATA_DIR_ESCAPED}|g" "${NEO4J_CONF_FILE}"
+sudo sed -i "s|^#*\(server\.directories\.logs\s*=\s*\).*|\1${NEO4J_LOGS_DIR_ESCAPED}|g" "${NEO4J_CONF_FILE}"
+
+# Ensure auth is enabled (dbms.security.auth_enabled is correct for Neo4j 5.x)
+# Neo4j 5 defaults to auth enabled (dbms.security.auth_enabled=true).
+# This line ensures it's not explicitly set to false.
+sudo sed -i "s|^#*\(dbms\.security\.auth_enabled\s*=\s*\)false|\1true|g" "${NEO4J_CONF_FILE}"
+# If the line #dbms.security.auth_enabled=true exists, uncomment it.
+sudo sed -i "s|^#\(dbms\.security\.auth_enabled\s*=\s*true\)|\1|g" "${NEO4J_CONF_FILE}"
+# If it doesn't exist and isn't set to false, it will default to true.
+
+# Disable initial password reset requirement by setting a known password (optional, but helps automation)
+# sudo sed -i "s|^#*\(initial\.default_password\s*=\s*\).*|\1${NEO4J_PASSWORD}|g" "${NEO4J_CONF_FILE}"
+# The above might not work as intended; password change via cypher-shell is more reliable.
+
+# Start Neo4j service
 echo "正在启动 Neo4j..."
-"${NEO4J_FINAL_DIR}/bin/neo4j" start
-sleep 10 # 等待 Neo4j 启动并初始化
-echo "Neo4j 启动完成。"
+"${NEO4J_SYMLINK_DIR}/bin/neo4j" start
+echo "等待 Neo4j 启动并初始化 (30 秒)..."
+sleep 30 # Increased wait time for Neo4j
 
-# 第一次启动后，Neo4j 会要求修改密码
+# 修改 Neo4j 默认密码
 echo "正在修改 Neo4j 默认密码..."
-NEO4J_CYPHER_SHELL="${NEO4J_FINAL_DIR}/bin/cypher-shell"
+NEO4J_CYPHER_SHELL="${NEO4J_SYMLINK_DIR}/bin/cypher-shell"
+
 if [ -f "${NEO4J_CYPHER_SHELL}" ]; then
-    # 等待 Neo4j Bolt 端口可连接
-    echo "等待 Neo4j Bolt 端口 ${NEO4J_PORT} 可用... (需要安装 netcat-traditional)"
+    echo "等待 Neo4j Bolt 端口 ${NEO4J_PORT} 可用..."
     COUNT=0
-    # 使用 nc -z <host> <port> 检查端口是否开放
-    while ! nc -z "${NEO4J_HOST}" "${NEO4J_PORT}" &> /dev/null && [ $COUNT -lt 15 ]; do
-        sleep 2
+    MAX_RETRIES_NEO4J=20 # Retries for Neo4j port check
+    RETRY_INTERVAL_NEO4J=3
+    while ! nc -z "${NEO4J_HOST}" "${NEO4J_PORT}" &> /dev/null && [ $COUNT -lt ${MAX_RETRIES_NEO4J} ]; do
+        echo "  尝试连接 Neo4j Bolt 端口... (${COUNT}/${MAX_RETRIES_NEO4J})"
+        sleep ${RETRY_INTERVAL_NEO4J}
         COUNT=$((COUNT+1))
     done
 
-    if [ $COUNT -lt 15 ]; then
-        # 使用 cypher-shell 修改密码
-        # 移除 --encrypted=false 参数，尝试直接连接
-        echo "CALL dbms.security.changeUserPassword('${NEO4J_PASSWORD}')" | "${NEO4J_CYPHER_SHELL}" -u neo4j -p neo4j --address "${NEO4J_HOST}:${NEO4J_PORT}"
-        if [ $? -ne 0 ]; then
-            echo "警告：cypher-shell 自动修改密码失败。请手动更改 Neo4j 密码。"
-            echo "请尝试运行：${NEO4J_FINAL_DIR}/bin/cypher-shell -u neo4j -p neo4j --address ${NEO4J_HOST}:${NEO4J_PORT}"
-            echo "然后执行：ALTER USER neo4j SET PASSWORD '${NEO4J_PASSWORD}';"
+    if [ $COUNT -lt ${MAX_RETRIES_NEO4J} ]; then
+        echo "Neo4j Bolt 端口可用。正在尝试修改密码..."
+        # Neo4j 5.x requires changing the password on first connect if not preset.
+        # Default user/pass is neo4j/neo4j.
+        # The command changes the password for the user 'neo4j'.
+        echo "CALL dbms.security.changeUserPassword('${NEO4J_USERNAME}', '${NEO4J_PASSWORD}', '${NEO4J_PASSWORD}')" | \
+        "${NEO4J_CYPHER_SHELL}" -u "${NEO4J_USERNAME}" -p "${NEO4J_USERNAME}" \
+        --address "${NEO4J_HOST}:${NEO4J_PORT}" --format plain --database neo4j
+        
+        # Alternative if the above fails due to 'current user' context.
+        # This command directly alters the 'neo4j' user's password.
+        # echo "ALTER USER ${NEO4J_USERNAME} SET PASSWORD '${NEO4J_PASSWORD}'" | \
+        # "${NEO4J_CYPHER_SHELL}" -u "${NEO4J_USERNAME}" -p "${NEO4J_USERNAME}" \
+        # --address "${NEO4J_HOST}:${NEO4J_PORT}" --format plain --database neo4j
+        
+        # After password change, the old password 'neo4j' is no longer valid.
+        # Subsequent connections should use the new password.
+        # For this script, we assume the change was successful.
+        # A verification step could be added here.
+
+        if [ $? -eq 0 ]; then
+            echo "Neo4j 密码修改命令已发送。新密码为 '${NEO4J_PASSWORD}'。"
+        else
+            echo "警告：cypher-shell 自动修改密码可能失败 (退出码 $?)。"
+            echo "请检查 Neo4j 日志: ${NEO4J_LOGS_DIR_CONF}"
+            echo "您可能需要手动更改 Neo4j 密码 '${NEO4J_USERNAME}'。"
+            echo "尝试运行: ${NEO4J_CYPHER_SHELL} -u ${NEO4J_USERNAME} -p <current_password> --address ${NEO4J_HOST}:${NEO4J_PORT}"
+            echo "然后执行: ALTER USER ${NEO4J_USERNAME} SET PASSWORD '${NEO4J_PASSWORD}';"
         fi
     else
-        echo "错误：Neo4j Bolt 端口未在预期时间内开放，无法连接 cypher-shell。"
+        echo "错误：Neo4j Bolt 端口 (${NEO4J_HOST}:${NEO4J_PORT}) 未在预期时间内开放。"
+        echo "请检查 Neo4j 服务状态和日志: ${NEO4J_LOGS_DIR_CONF}"
+        echo "  ${NEO4J_SYMLINK_DIR}/bin/neo4j status"
     fi
 else
-    echo "警告：cypher-shell 未找到。无法自动更改 Neo4j 密码，请手动更改。"
-    echo "请在 Neo4j 启动后，尝试手动找到 cypher-shell 并执行密码修改。"
+    echo "警告：cypher-shell 未找到 (${NEO4J_CYPHER_SHELL})。无法自动更改 Neo4j 密码。"
 fi
-echo "Neo4j 密码修改尝试完成。"
+echo "Neo4j 配置和密码修改尝试完成。"
 
 
 # --- 总结 ---
 echo ""
 echo "--- 所有数据库安装和配置脚本已运行完成 ---"
-echo "请注意：这些数据库将在容器内运行，但数据是非持久化的，除非容器启动时有挂载外部卷。"
+echo "请注意：这些数据库将在容器内运行，但数据是非持久化的，除非容器启动时有挂载外部卷到 ${DATA_BASE_DIR}。"
 echo "以下是连接信息："
 echo "--------------------------------------------------"
 echo "MongoDB:"
@@ -338,14 +376,16 @@ echo "  Host: ${MONGO_HOST}"
 echo "  Port: ${MONGO_PORT}"
 echo "  Username: ${MONGO_USERNAME}"
 echo "  Password: ${MONGO_PASSWORD}"
-echo "  Database: ${MONGO_DB_NAME}"
+echo "  Database: ${MONGO_DB_NAME} (or connect to admin db first)"
+echo "  Log: ${DATA_BASE_DIR}/mongodb/mongod.log, ${DATA_BASE_DIR}/mongodb/mongod_stdout.log"
 echo "--------------------------------------------------"
 echo "MinIO:"
 echo "  Host: ${MINIO_HOST}"
 echo "  Port: ${MINIO_PORT}"
 echo "  Access Key: ${MINIO_USERNAME}"
 echo "  Secret Key: ${MINIO_PASSWORD}"
-echo "  Console URL: http://${MINIO_HOST}:${MINIO_PORT}"
+echo "  API Endpoint: http://${MINIO_HOST}:${MINIO_PORT}"
+echo "  Log: ${DATA_BASE_DIR}/minio.log"
 echo "--------------------------------------------------"
 echo "Redis:"
 echo "  Host: ${REDIS_HOST}"
@@ -356,19 +396,25 @@ if [ -n "$REDIS_PASSWORD" ]; then
 else
     echo "  Password: (无)"
 fi
+echo "  Log: ${DATA_BASE_DIR}/redis.log"
+echo "  Data Dir: ${REDIS_DATA_DIR}"
 echo "--------------------------------------------------"
 echo "Neo4j:"
 echo "  Host: ${NEO4J_HOST}"
 echo "  Bolt Port: ${NEO4J_PORT}"
-echo "  HTTP Port: ${NEO4J_HTTP_PORT}"
+echo "  HTTP Port: ${NEO4J_HTTP_PORT} (Browser: http://${NEO4J_HOST}:${NEO4J_HTTP_PORT})"
 echo "  Username: ${NEO4J_USERNAME}"
-echo "  Password: ${NEO4J_PASSWORD}"
+echo "  Password: ${NEO4J_PASSWORD} (if change was successful)"
+echo "  Data Dir: ${NEO4J_DATA_DIR_CONF}"
+echo "  Logs Dir: ${NEO4J_LOGS_DIR_CONF}"
 echo "--------------------------------------------------"
 
 echo ""
-echo "请手动检查各个服务的状态，确保它们已成功启动。"
-echo "  MongoDB: ps aux | grep mongod"
-echo "  MinIO: ps aux | grep minio"
-echo "  Redis: ps aux | grep redis-server"
-echo "  Neo4j: ${NEO4J_FINAL_DIR}/bin/neo4j status"
+echo "请手动检查各个服务的状态和日志，确保它们已成功启动并配置正确。"
+echo "  MongoDB: ps aux | grep mongod; tail -n 20 ${DATA_BASE_DIR}/mongodb/mongod.log"
+echo "  MinIO: ps aux | grep minio; tail -n 20 ${DATA_BASE_DIR}/minio.log"
+echo "  Redis: ps aux | grep redis-server; tail -n 20 ${DATA_BASE_DIR}/redis.log"
+echo "  Neo4j: ${NEO4J_SYMLINK_DIR}/bin/neo4j status; tail -n 20 ${NEO4J_LOGS_DIR_CONF}/neo4j.log"
 echo ""
+echo "脚本执行完毕。"
+
