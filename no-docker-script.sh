@@ -41,9 +41,10 @@ sudo chown -R "$(whoami)":"$(whoami)" "${INSTALL_BASE_DIR}" "${DATA_BASE_DIR}"
 
 # --- 安装必要的工具 ---
 echo ""
-echo "--- 正在安装必要工具 (gnupg, curl, wget, psmisc) ---"
+echo "--- 正在安装必要工具 (gnupg, curl, wget, psmisc, netcat-traditional) ---"
+# apt install -y netcat-traditional 提供传统的 nc 命令，而不是 OpenBSD 版本
 sudo apt update
-sudo apt install -y gnupg curl wget psmisc # 添加 psmisc
+sudo apt install -y gnupg curl wget psmisc netcat-traditional
 if [ $? -ne 0 ]; then
     echo "错误：apt update 或安装必要工具失败，请检查网络和权限。"
     exit 1
@@ -133,7 +134,7 @@ EOF"
 # 启动 MongoDB 守护进程 (使用 nohup 绕过 systemd)
 echo "正在启动 MongoDB..."
 nohup sudo mongod --config /etc/mongod.conf > "${DATA_BASE_DIR}/mongodb/mongod_stdout.log" 2>&1 &
-sleep 5 # 等待 MongoDB 启动
+sleep 10 # 增加等待时间，确保 MongoDB 完全启动
 echo "MongoDB 启动完成。"
 
 # 配置 MongoDB 用户和密码
@@ -151,13 +152,14 @@ fi
 if [ -n "$MONGO_SHELL_CMD" ]; then
     # 等待 MongoDB 接受连接
     COUNT=0
-    while ! ${MONGO_SHELL_CMD} --eval "db.adminCommand({ ping: 1 })" &> /dev/null && [ $COUNT -lt 15 ]; do # 增加等待时间
-        echo "等待 MongoDB 响应... (尝试 ${COUNT}/15)"
+    # 使用 nc 命令检查端口是否开放，更可靠
+    while ! nc -z ${MONGO_HOST} ${MONGO_PORT} &> /dev/null && [ $COUNT -lt 20 ]; do # 增加等待时间
+        echo "等待 MongoDB 响应... (尝试 ${COUNT}/20)"
         sleep 2
         COUNT=$((COUNT+1))
     done
 
-    if [ $COUNT -lt 15 ]; then
+    if [ $COUNT -lt 20 ]; then
         ${MONGO_SHELL_CMD} <<EOF
 use admin
 db.createUser({
@@ -216,12 +218,13 @@ REDIS_CONF_PATH="/etc/redis/redis.conf"
 if [ -f "${REDIS_CONF_PATH}" ]; then
     sudo mv "${REDIS_CONF_PATH}" "${REDIS_CONF_PATH}.backup"
 fi
+# 修正：移除 daemonize yes 行后面的注释
 sudo bash -c "cat <<EOF > ${REDIS_CONF_PATH}
 bind 0.0.0.0
 port ${REDIS_PORT}
 timeout 0
 tcp-keepalive 300
-daemonize yes # 作为后台进程运行
+daemonize yes
 pidfile /var/run/redis-server.pid
 logfile \"${DATA_BASE_DIR}/redis.log\"
 databases ${REDIS_DB}
@@ -297,20 +300,21 @@ echo "正在修改 Neo4j 默认密码..."
 NEO4J_CYPHER_SHELL="${NEO4J_FINAL_DIR}/bin/cypher-shell"
 if [ -f "${NEO4J_CYPHER_SHELL}" ]; then
     # 等待 Neo4j Bolt 端口可连接
-    echo "等待 Neo4j Bolt 端口 ${NEO4J_PORT} 可用..."
+    echo "等待 Neo4j Bolt 端口 ${NEO4J_PORT} 可用... (需要安装 netcat-traditional)"
     COUNT=0
-    while ! nc -z ${NEO4J_HOST} ${NEO4J_PORT} && [ $COUNT -lt 15 ]; do
+    # 使用 nc -z <host> <port> 检查端口是否开放
+    while ! nc -z "${NEO4J_HOST}" "${NEO4J_PORT}" &> /dev/null && [ $COUNT -lt 15 ]; do
         sleep 2
         COUNT=$((COUNT+1))
     done
 
     if [ $COUNT -lt 15 ]; then
         # 使用 cypher-shell 修改密码
-        # 移除 --encrypted=false 参数
+        # 移除 --encrypted=false 参数，尝试直接连接
         echo "CALL dbms.security.changeUserPassword('${NEO4J_PASSWORD}')" | "${NEO4J_CYPHER_SHELL}" -u neo4j -p neo4j --address "${NEO4J_HOST}:${NEO4J_PORT}"
         if [ $? -ne 0 ]; then
             echo "警告：cypher-shell 自动修改密码失败。请手动更改 Neo4j 密码。"
-            echo "请尝试运行：${NEO4J_CYPHER_DIR}/bin/cypher-shell -u neo4j -p neo4j --address ${NEO4J_HOST}:${NEO4J_PORT}"
+            echo "请尝试运行：${NEO4J_FINAL_DIR}/bin/cypher-shell -u neo4j -p neo4j --address ${NEO4J_HOST}:${NEO4J_PORT}"
             echo "然后执行：ALTER USER neo4j SET PASSWORD '${NEO4J_PASSWORD}';"
         fi
     else
