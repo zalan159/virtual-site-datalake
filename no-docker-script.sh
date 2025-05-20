@@ -363,13 +363,6 @@ if [ -n "$REDIS_PASSWORD" ]; then
 fi
 REDIS_PING_CMD="${REDIS_PING_CMD} ping"
 
-pip install uv
-
-uv venv
-uv pip sync uv.lock
-
-cp .example .env && sed -i 's/MONGO_DB_NAME=/MONGO_DB_NAME=virtualsite/g' .env && sed -i 's/MINIO_USERNAME=/MINIO_USERNAME=minioadmin/g' .env && sed -i 's/MINIO_PASSWORD=/MINIO_PASSWORD=minioadmin/g' .env && sed -i 's/JWT_SECRET_KEY=/JWT_SECRET_KEY=virtualsite_jwt_secret_123456/g' .env
-
 echo "  Redis: ps aux | grep redis-server; tail -n 20 ${DATA_BASE_DIR}/redis.log; ${REDIS_PING_CMD}"
 echo "  Neo4j: ${NEO4J_SYMLINK_DIR}/bin/neo4j status; tail -n 30 ${NEO4J_LOGS_DIR_CONF}/neo4j.log"
 echo ""
