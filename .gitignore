@@ -1,0 +1,70 @@
+# Python虚拟环境
+venv/
+env/
+ENV/
+.venv/
+
+# Python缓存文件
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 分发/打包
+dist/
+build/
+*.egg-info/
+
+# 单元测试/覆盖率报告
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# 环境变量文件
+.env
+.env.local
+.env.production
+
+# IDE相关
+.idea/
+.vscode/
+*.swp
+*.swo
+.cursor/
+
+# 操作系统相关
+.DS_Store
+Thumbs.db
+
+# 日志文件
+*.log
+
+# Node.js (前端相关)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 临时文件
+*.tmp
+*.temp
+
+# 数据库文件
+*.sqlite
+*.db
+
+# 上传的文件
+uploads/
+static/uploads/
+
+# 锁定文件
+package-lock.json
+yarn.lock

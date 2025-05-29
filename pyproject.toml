@@ -1,0 +1,58 @@
+[project]
+name = "virtualsite"
+version = "1.0.0"
+description = "灵境孪生中台 - 面向数字孪生场景的数据服务平台"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "motor",
+    "pymongo", 
+    "redis",
+    "minio",
+    "python-multipart",
+    "python-jose",
+    "passlib",
+    "python-dotenv",
+    "pydantic",
+    "neomodel",
+    "paho-mqtt",
+    "Pillow",
+    "aiofiles",
+    "httpx",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "black",
+    "isort",
+    "flake8",
+]
+sms = [
+    "aliyun-python-sdk-core",
+    "aliyun-python-sdk-dysmsapi",
+]
+tasks = [
+    "celery",
+    "flower",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.black]
+line-length = 88
+target-version = ['py310']
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[project.urls]
+Homepage = "https://github.com/zhouzal/VirtualSite"
+Repository = "https://github.com/zhouzal/VirtualSite"
+Issues = "https://github.com/zhouzal/VirtualSite/issues" 

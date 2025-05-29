@@ -1,0 +1,5 @@
+{
+  "scripts": {
+    "start": "npx http-server -a localhost -p 8089 -c -1"
+  }
+}

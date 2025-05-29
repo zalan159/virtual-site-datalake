@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  mongo:
+    image: mongo:latest
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
+    volumes:
+      - mongo_data:/data/db
+
+  minio:
+    image: minio/minio
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_USERNAME}
+      - MINIO_ROOT_PASSWORD=${MINIO_PASSWORD}
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+
+  redis:
+    image: redis:latest
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+  neo4j:
+    image: neo4j:latest
+    ports:
+      - "${NEO4J_PORT:-7687}:7687"
+      - "${NEO4J_HTTP_PORT:-7474}:7474"
+    environment:
+      - NEO4J_AUTH=${NEO4J_USERNAME}/${NEO4J_PASSWORD}
+    volumes:
+      - neo4j_data:/data
+
+volumes:
+  mongo_data:
+  minio_data:
+  redis_data:
+  neo4j_data: 
