@@ -1,6 +1,10 @@
-# 灵境孪生中台
+
+<img width="1466" alt="image" src="https://github.com/user-attachments/assets/94022e80-f038-4b56-b7a9-3154a28a6149" />
 
 "灵境孪生中台"是面向数字孪生场景的数据服务平台，致力于为数字孪生管理和应用提供统一、标准化、多源异构数据的整合与服务能力。平台支持多种工业数据类型的接入、转换、存储、管理与分发，助力数字孪生场景的快速构建与高效运维。
+测试demo：
+
+https://www.virtual-site.com:3000
 
 ## 项目目标
 
@@ -8,34 +12,51 @@
 
 ## 支持的数据类型
 
+
 1. **3D工业模型数据**
    - 支持多种3D工业模型格式，统一转换为GLB格式存储。
+
+
+
+https://github.com/user-attachments/assets/f6e44930-524d-48d8-bac3-e770dcf9d2d8
+
+
+
+
    - 元数据（如模型描述、结构、标签等）单独抽离存储于MongoDB。
+<img width="1469" alt="image" src="https://github.com/user-attachments/assets/de122c88-f047-4709-9b80-5160a9dc2f36" />
+
    - 转换后的模型作为数字孪生场景的基础素材，可实例化为模型实例。
 
+
+https://github.com/user-attachments/assets/100a5935-31ec-4698-ae4a-0e95752661e9
+
+
 2. **模型实例与场景**
+<img width="1465" alt="image" src="https://github.com/user-attachments/assets/3cac6721-c4d9-4643-8ad7-8878d3410628" />
+
    - 支持对基础模型进行实例化，形成模型实例。
    - 模型实例作为数字孪生数据的载体，组成场景结构。
 
-3. **IoT数据**
+4. **IoT数据**
    - 支持用户自定义输入MQTT数据源，通过连接池管理。
    - 平台自动订阅、实时缓存于Redis，并持久化至MongoDB。
    - 用户可查阅历史与实时MQTT数据，并可将订阅对象绑定到模型实例。
 
-4. **附件数据**
+5. **附件数据**
    - 使用MinIO进行对象存储，支持各类附件上传。
    - 可将MinIO对象链接绑定到模型实例。
 
-5. **视频流数据**
+6. **视频流数据**
    - 支持多种实时视频流（如HLS、RTSP、海康SDK等）。
    - 视频流信息存储于MongoDB，通过平台统一转为标准接口（可扩展）。
    - 支持流送服务（不做视频存储），可绑定到模型实例。
 
-6. **GIS数据**
+7. **GIS数据**
    - 支持3DTiles数据上传，并可转换为TMS、WMS、WTMS等服务。
    - GIS数据可绑定到数字孪生场景。
 
-7. **数据可视化**
+8. **数据可视化**
    - 集成GoView数据可视化编辑工具，支持拖拽生成可视化报表。
    - 可视化报表可绑定并叠加到场景中。
 
