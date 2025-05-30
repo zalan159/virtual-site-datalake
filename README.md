@@ -247,3 +247,6 @@ https://github.com/user-attachments/assets/100a5935-31ec-4698-ae4a-0e95752661e9
 3. 各数据库服务是否正常启动
 4. 网络端口是否被占用
 5. 格式转换程序是否正确配置
+# 加入开发者社区
+
+<img src="https://github.com/user-attachments/assets/55417cbd-7c47-489f-bc8a-106439e0be36" alt="image" width="30%" />
