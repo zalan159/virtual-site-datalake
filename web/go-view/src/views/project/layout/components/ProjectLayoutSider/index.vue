@@ -92,7 +92,7 @@ $siderHeight: 100vh;
     height: $siderHeight;
   }
   .content-top {
-    top: $--header-height;
+    top: $header-height;
     margin-top: 1px;
   }
 }

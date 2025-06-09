@@ -60,7 +60,7 @@ $min-width: 520px;
         justify-content: end;
       }
     }
-    height: $--header-height;
+    height: $header-height;
     padding: 0 20px 0 60px;
   }
 }

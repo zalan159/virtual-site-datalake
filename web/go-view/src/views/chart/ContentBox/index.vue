@@ -99,7 +99,7 @@ const backHandle = () => {
 $topOrBottomHeight: 40px;
 
 @include go(content-box) {
-  height: calc(100vh - #{$--header-height});
+  height: calc(100vh - #{$header-height});
   margin: 1px;
   margin-bottom: 0;
 
@@ -165,7 +165,7 @@ $topOrBottomHeight: 40px;
   }
 
   .content {
-    height: calc(100vh - #{$--header-height});
+    height: calc(100vh - #{$header-height});
     overflow: hidden;
   }
 
@@ -174,11 +174,11 @@ $topOrBottomHeight: 40px;
   }
 
   .content-height-show-top-bottom {
-    height: calc(100vh - #{$--header-height} - #{$topOrBottomHeight});
+    height: calc(100vh - #{$header-height} - #{$topOrBottomHeight});
   }
 
   .content-height-show-both {
-    height: calc(100vh - #{$--header-height} - #{$topOrBottomHeight} - #{$topOrBottomHeight});
+    height: calc(100vh - #{$header-height} - #{$topOrBottomHeight} - #{$topOrBottomHeight});
   }
 }
 </style>

@@ -332,7 +332,7 @@ window.onKeySpacePressHold = (isHold: boolean) => {
     right: 0;
     width: 10px;
     height: 10px;
-    background-color: $--color-dark-bg-1;
+    background-color: $color-dark-bg-1;
   }
 
   .edit-screen-container {

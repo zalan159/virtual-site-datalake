@@ -32,7 +32,7 @@ import { LayoutTransitionMain } from '@/layout/components/LayoutTransitionMain/i
 <style lang="scss" scoped>
 @include go(project) {
   .content-top {
-    top: $--header-height;
+    top: $header-height;
     margin-top: 1px;
   }
 }

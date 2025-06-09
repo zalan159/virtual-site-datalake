@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Spin, message, Button, Space } from 'antd';
 import { SaveOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import chartApi, { Chart } from '../services/chartApi';
+import { isValidMessageSource, postMessageToGoView, buildGoViewEditorUrl } from '../config/iframe';
 
 const ChartEditorStandalone: React.FC = () => {
   const { chartId } = useParams<{ chartId: string }>();
@@ -13,10 +14,6 @@ const ChartEditorStandalone: React.FC = () => {
   const [chart, setChart] = useState<Chart | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // GoView编辑器的URL - 这里需要替换为实际的GoView编辑器地址
-  const GOVIEW_EDITOR_URL = import.meta.env.VITE_REACT_APP_GOVIEW_EDITOR_URL || 
-    (import.meta.env.PROD ? '/goview' : 'http://localhost:3001');
-  
   // 获取当前用户token
   const getCurrentUserToken = (): string | null => {
     return localStorage.getItem('token');
@@ -68,9 +65,8 @@ const ChartEditorStandalone: React.FC = () => {
       }
     };
 
-    // 向GoView编辑器的origin发送消息
-    const targetOrigin = new URL(GOVIEW_EDITOR_URL).origin;
-    iframeRef.current.contentWindow.postMessage(message, targetOrigin);
+    // 向GoView编辑器发送消息
+    postMessageToGoView(iframeRef, message);
   };
 
   const handleSave = async () => {
@@ -84,8 +80,7 @@ const ChartEditorStandalone: React.FC = () => {
         chartId: chart.uid
       };
 
-      const targetOrigin = new URL(GOVIEW_EDITOR_URL).origin;
-      iframeRef.current.contentWindow.postMessage(requestMessage, targetOrigin);
+      postMessageToGoView(iframeRef, requestMessage);
     } catch (error) {
       message.error('保存失败');
       console.error('保存失败:', error);
@@ -103,8 +98,7 @@ const ChartEditorStandalone: React.FC = () => {
         chartId: chart.uid
       };
 
-      const targetOrigin = new URL(GOVIEW_EDITOR_URL).origin;
-      iframeRef.current.contentWindow.postMessage(requestMessage, targetOrigin);
+      postMessageToGoView(iframeRef, requestMessage);
     } catch (error) {
       console.error('生成预览图失败:', error);
     }
@@ -114,8 +108,7 @@ const ChartEditorStandalone: React.FC = () => {
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
       // 验证消息来源
-      const targetOrigin = new URL(GOVIEW_EDITOR_URL).origin;
-      if (event.origin !== targetOrigin) return;
+      if (!isValidMessageSource(event, iframeRef)) return;
 
       const { type, data, chartId: messageChartId } = event.data;
 
@@ -173,7 +166,7 @@ const ChartEditorStandalone: React.FC = () => {
     return () => {
       window.removeEventListener('message', handleMessage);
     };
-  }, [chart, chartId, GOVIEW_EDITOR_URL]);
+  }, [chart, chartId]);
 
   const handleBack = () => {
     navigate(-1);
@@ -220,7 +213,7 @@ const ChartEditorStandalone: React.FC = () => {
         
         <iframe
           ref={iframeRef}
-          src={`${GOVIEW_EDITOR_URL}/#/chart/home/${chartId}?token=${getCurrentUserToken()}`}
+          src={buildGoViewEditorUrl(chartId || '', getCurrentUserToken() || undefined)}
           style={{
             width: '100%',
             height: '100%',

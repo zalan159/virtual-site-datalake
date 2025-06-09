@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Spin, Button, Space } from 'antd';
 import { ArrowLeftOutlined, EditOutlined } from '@ant-design/icons';
 import chartApi, { Chart } from '../services/chartApi';
+import { isValidMessageSource, postMessageToGoView, buildGoViewViewerUrl } from '../config/iframe';
 
 const ChartPreviewStandalone: React.FC = () => {
   const { chartId } = useParams<{ chartId: string }>();
@@ -12,10 +13,6 @@ const ChartPreviewStandalone: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [chart, setChart] = useState<Chart | null>(null);
 
-  // GoView预览器的URL
-  const GOVIEW_VIEWER_URL = import.meta.env.VITE_REACT_APP_GOVIEW_VIEWER_URL || 
-    (import.meta.env.PROD ? '/goview' : 'http://localhost:3001');
-  
   // 获取当前用户token
   const getCurrentUserToken = (): string | null => {
     return localStorage.getItem('token');
@@ -66,14 +63,14 @@ const ChartPreviewStandalone: React.FC = () => {
       }
     };
 
-    iframeRef.current.contentWindow.postMessage(message, GOVIEW_VIEWER_URL);
+    postMessageToGoView(iframeRef, message);
   };
 
   // 监听来自GoView预览器的消息
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       // 验证消息来源
-      if (event.origin !== GOVIEW_VIEWER_URL) return;
+      if (!isValidMessageSource(event, iframeRef)) return;
 
       const { type, chartId: messageChartId } = event.data;
 
@@ -104,7 +101,7 @@ const ChartPreviewStandalone: React.FC = () => {
     return () => {
       window.removeEventListener('message', handleMessage);
     };
-  }, [chart, chartId, GOVIEW_VIEWER_URL]);
+  }, [chart, chartId]);
 
   const handleBack = () => {
     navigate(-1);
@@ -191,7 +188,7 @@ const ChartPreviewStandalone: React.FC = () => {
         
         <iframe
           ref={iframeRef}
-          src={`${GOVIEW_VIEWER_URL}/project-view?projectId=${chartId}&token=${getCurrentUserToken()}`}
+          src={buildGoViewViewerUrl(chartId || '', getCurrentUserToken() || undefined)}
           style={{
             width: '100%',
             height: '100%',

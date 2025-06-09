@@ -62,7 +62,7 @@ $contentHeight: 250px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: calc(100vh - #{$--header-height} - 40px - 2px);
+  min-height: calc(100vh - #{$header-height} - 40px - 2px);
   .list-content {
     position: relative;
     height: $contentHeight;

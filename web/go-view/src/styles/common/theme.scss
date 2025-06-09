@@ -1,10 +1,10 @@
-@import './mixins/config.scss';
-@import './_dark.scss';
-@import './_light.scss';
+@use './mixins/config.scss' as config;
+@use './_dark.scss' as dark;
+@use './_light.scss' as light;
 
 $themes: (
   // 亮白
-  #{$theme-light}: $light,
+  #{config.$theme-light}: light.$light,
   // 暗黑
-  #{$theme-dark}: $dark
+  #{config.$theme-dark}: dark.$dark
 );

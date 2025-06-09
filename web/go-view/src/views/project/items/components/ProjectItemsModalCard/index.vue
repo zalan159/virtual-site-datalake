@@ -147,7 +147,7 @@ $contentWidth: calc(82vw);
   height: $contentHeight;
   .list-content {
     margin-top: 20px;
-    border-radius: $--border-radius-base;
+    border-radius: $border-radius-base;
     overflow: hidden;
     @include background-image('background-point');
     @extend .go-point-bg;

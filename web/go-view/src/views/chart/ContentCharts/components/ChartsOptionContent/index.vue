@@ -130,7 +130,7 @@ $topHeight: 40px;
 $menuWidth: 65px;
 @include go('chart-common') {
   display: flex;
-  height: calc(100vh - #{$--header-height} - #{$topHeight});
+      height: calc(100vh - #{$header-height} - #{$topHeight});
   .chart-menu-width {
     width: $menuWidth;
     flex-shrink: 0;

@@ -59,7 +59,7 @@ export default ({ mode }) => defineConfig({
     preprocessorOptions: {
       scss: {
         javascriptEnabled: true,
-        additionalData: `@import "src/styles/common/style.scss";`
+        additionalData: `@use "src/styles/common/style.scss" as *;`
       }
     }
   },
@@ -88,7 +88,13 @@ export default ({ mode }) => defineConfig({
   plugins: [
     vue(),
     monacoEditorPlugin({
-      languageWorkers: ['editorWorkerService', 'typescript', 'json', 'html']
+      languageWorkers: ['editorWorkerService', 'typescript', 'json', 'html'],
+      customWorkers: [
+        {
+          label: 'editorWorkerService',
+          entry: 'monaco-editor/esm/vs/editor/editor.worker.js'
+        }
+      ]
     }),
     viteMockServe({
       mockPath: '/src/api/mock',

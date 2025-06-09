@@ -1,9 +1,13 @@
-@import './config.scss';
-@import './function.scss';
-@import '../theme.scss';
+@use "sass:map";
+@use './config.scss' as config;
+@use './function.scss' as func;
+@use '../theme.scss' as theme;
+
+// 在文件顶部声明全局变量以修复Sass 2.0.0兼容性问题
+$theme-map: null !default;
 
 @mixin go($block) {
-  $B: $namespace + '-' + $block;
+  $B: config.$namespace + '-' + $block;
   .#{$B} {
     @content;
   }
@@ -16,7 +20,7 @@
 }
 
 @mixin goId($block) {
-  $B: $namespace + '-' + $block;
+  $B: config.$namespace + '-' + $block;
   ##{$B} {
     @content;
   }
@@ -30,55 +34,54 @@
 
 @mixin when($state) {
   @at-root {
-    &.#{$state-prefix + $state} {
+    &.#{config.$state-prefix + $state} {
       @content;
     }
   }
 }
 
 @mixin themeify {
-  @each $theme-name, $theme-map in $themes {
-    $theme-map: $theme-map !global;
+  @each $theme-name, $current-theme-map in theme.$themes {
     [data-theme='#{$theme-name}'] & {
-      @content;
+      @content($current-theme-map);
     }
   }
 }
 
 @mixin fetch-theme($param) {
-  @include themeify {
-    #{$param}: themed($param);
+  @include themeify using ($current-theme-map) {
+    #{$param}: map.get($current-theme-map, $param);
   }
 }
 
 @mixin fetch-theme-custom ($key, $value) {
-  @include themeify {
-    #{$key}: themed($value);
+  @include themeify using ($current-theme-map) {
+    #{$key}: map.get($current-theme-map, $value);
   }
 }
 
 //获取背景颜色
 @mixin fetch-bg-color($target) {
-  @include themeify {
-    background-color: themed($target);
+  @include themeify using ($current-theme-map) {
+    background-color: map.get($current-theme-map, $target);
   }
 }
 
 //获取背景渐变颜色
 @mixin background-image($target) {
-  @include themeify {
-    background-image: themed($target);
+  @include themeify using ($current-theme-map) {
+    background-image: map.get($current-theme-map, $target);
   }
 }
 
 //设置边框颜色
 @mixin fetch-border-color($target) {
-  @include themeify {
-    border-color: themed($target);
+  @include themeify using ($current-theme-map) {
+    border-color: map.get($current-theme-map, $target);
   }
 }
 @mixin hover-border-color($target) {
-  @include themeify {
-    border: 1px solid themed($target);
+  @include themeify using ($current-theme-map) {
+    border: 1px solid map.get($current-theme-map, $target);
   }
 }

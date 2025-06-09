@@ -60,7 +60,7 @@ $topHeight: 40px;
   }
   .menu-width-box {
     display: flex;
-    height: calc(100vh - #{$--header-height} - #{$topHeight});
+    height: calc(100vh - #{$header-height} - #{$topHeight});
     .menu-width {
       flex-shrink: 0;
       @include fetch-bg-color('background-color2');

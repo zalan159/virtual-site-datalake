@@ -29,6 +29,6 @@ import { docPath } from '@/settings/pathConst'
   align-items: center;
   width: 100%;
   padding: 0 40px;
-  height: $--footer-height;
+      height: $footer-height;
 }
 </style>

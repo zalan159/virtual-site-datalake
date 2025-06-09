@@ -110,7 +110,7 @@ const handleClick = (key: 'close' | 'remove' | 'resize' | 'fullResize') => {
     width: 14px;
     height: 14px;
     margin: 0 4px;
-    color: $--color-text;
+    color: $color-text;
     font-weight: bold;
     border-radius: 50%;
     &.mini {
@@ -129,14 +129,14 @@ const handleClick = (key: 'close' | 'remove' | 'resize' | 'fullResize') => {
     }
   }
   .close {
-    background-color: $--color-red;
+    background-color: $color-red;
   }
   .remove {
-    background-color: $--color-warn;
+    background-color: $color-warn;
   }
   .resize,
   .fullResize {
-    background-color: $--color-success;
+    background-color: $color-success;
   }
 }
 </style>

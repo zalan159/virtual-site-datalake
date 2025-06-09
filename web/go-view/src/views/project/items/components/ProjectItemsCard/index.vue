@@ -185,7 +185,7 @@ const resizeHandle = () => {
 $contentHeight: 180px;
 @include go('items-list-card') {
   position: relative;
-  border-radius: $--border-radius-base;
+  border-radius: $border-radius-base;
   border: 1px solid rgba(0, 0, 0, 0);
   @extend .go-transition;
   &:hover {
@@ -195,7 +195,7 @@ $contentHeight: 180px;
     margin-top: 20px;
     margin-bottom: 5px;
     cursor: pointer;
-    border-radius: $--border-radius-base;
+    border-radius: $border-radius-base;
     @include background-image('background-point');
     @extend .go-point-bg;
     &-top {
