@@ -14,7 +14,8 @@ const ChartEditorStandalone: React.FC = () => {
   const [saving, setSaving] = useState(false);
 
   // GoView编辑器的URL - 这里需要替换为实际的GoView编辑器地址
-  const GOVIEW_EDITOR_URL = import.meta.env.VITE_REACT_APP_GOVIEW_EDITOR_URL || 'http://localhost:3001';
+  const GOVIEW_EDITOR_URL = import.meta.env.VITE_REACT_APP_GOVIEW_EDITOR_URL || 
+    (import.meta.env.PROD ? '/goview' : 'http://localhost:3001');
   
   // 获取当前用户token
   const getCurrentUserToken = (): string | null => {

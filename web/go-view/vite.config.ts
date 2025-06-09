@@ -12,7 +12,7 @@ function pathResolve(dir: string) {
 }
 
 export default ({ mode }) => defineConfig({
-  base: process.env.NODE_ENV === 'production' ? './' : '/',
+  base: process.env.NODE_ENV === 'production' ? '/goview/' : '/',
   // 路径重定向
   resolve: {
     alias: [
@@ -89,7 +89,7 @@ export default ({ mode }) => defineConfig({
   ],
   build: {
     target: 'es2020',
-    outDir: OUTPUT_DIR,
+    outDir: '../dist/goview',
     reportCompressedSize: false,
     // minify: 'terser', // 如果需要用terser混淆，可打开这两行
     // terserOptions: terserOptions,

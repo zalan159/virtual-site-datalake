@@ -13,7 +13,8 @@ const ChartPreviewStandalone: React.FC = () => {
   const [chart, setChart] = useState<Chart | null>(null);
 
   // GoView预览器的URL
-  const GOVIEW_VIEWER_URL = import.meta.env.VITE_REACT_APP_GOVIEW_VIEWER_URL || 'http://localhost:3001';
+  const GOVIEW_VIEWER_URL = import.meta.env.VITE_REACT_APP_GOVIEW_VIEWER_URL || 
+    (import.meta.env.PROD ? '/goview' : 'http://localhost:3001');
   
   // 获取当前用户token
   const getCurrentUserToken = (): string | null => {
