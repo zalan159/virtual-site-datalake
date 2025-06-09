@@ -1,11 +1,34 @@
 import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
-import { OUTPUT_DIR, brotliSize, chunkSizeWarningLimit, terserOptions, rollupOptions } from './build/constant'
 import viteCompression from 'vite-plugin-compression'
 import { axiosPre } from './src/settings/httpSetting'
 import { viteMockServe } from 'vite-plugin-mock'
 import monacoEditorPlugin from 'vite-plugin-monaco-editor'
+
+// 内联构建常量，避免导入问题
+const prefix = `monaco-editor/esm/vs`
+const chunkSizeWarningLimit = 2000
+const rollupOptions = {
+  output: {
+    chunkFileNames: 'static/js/[name]-[hash].js',
+    entryFileNames: 'static/js/[name]-[hash].js',
+    assetFileNames: (chunkInfo: any) => {
+      const ext = '.' + (chunkInfo.name?.split('.').pop() || '')
+      if(['.png', '.jpg', '.jpeg'].includes(ext)) {
+        return `static/[ext]/[name].[ext]`
+      }
+      return `static/[ext]/[name]-[hash].[ext]`
+    },
+    manualChunks: {
+      jsonWorker: [`${prefix}/language/json/json.worker`],
+      cssWorker: [`${prefix}/language/css/css.worker`],
+      htmlWorker: [`${prefix}/language/html/html.worker`],
+      tsWorker: [`${prefix}/language/typescript/ts.worker`],
+      editorWorker: [`${prefix}/editor/editor.worker`]
+    }
+  }
+}
 
 function pathResolve(dir: string) {
   return resolve(process.cwd(), '.', dir)
@@ -92,7 +115,13 @@ export default ({ mode }) => defineConfig({
     outDir: '../dist/goview',
     reportCompressedSize: false,
     // minify: 'terser', // 如果需要用terser混淆，可打开这两行
-    // terserOptions: terserOptions,
+    // terserOptions: {
+    //   compress: {
+    //     keep_infinity: true,
+    //     drop_console: true,
+    //     drop_debugger: true
+    //   }
+    // },
     rollupOptions: rollupOptions,
     chunkSizeWarningLimit: chunkSizeWarningLimit
   }
