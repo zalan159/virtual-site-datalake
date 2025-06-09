@@ -298,7 +298,11 @@ const ChartData: React.FC = () => {
                      </Tooltip>,
                      <Popconfirm
                        title="确定要删除这个图表吗？"
-                       onConfirm={() => handleDelete(chart.uid)}
+                       onConfirm={(e) => {
+                         e?.preventDefault();
+                         e?.stopPropagation();
+                         handleDelete(chart.uid);
+                       }}
                        okText="确定"
                        cancelText="取消"
                      >
