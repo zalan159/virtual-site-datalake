@@ -19,7 +19,7 @@ export interface MyRequestInstance extends Axios {
 }
 
 const axiosInstance = axios.create({
-  baseURL: `${import.meta.env.PROD ? import.meta.env.VITE_PRO_PATH : import.meta.env.VITE_DEV_PATH}${axiosPre}`,
+  baseURL: import.meta.env.PROD ? axiosPre : axiosPre, // 开发和生产都使用axiosPre，由vite代理或nginx处理
   timeout: ResultEnum.TIMEOUT
 }) as unknown as MyRequestInstance
 

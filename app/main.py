@@ -87,7 +87,7 @@ app.include_router(public_models.router, prefix="/public-models", tags=["公共�
 app.include_router(threedtiles.router, prefix="/3dtiles", tags=["3DTiles模型"])  # 添加3DTiles路由
 app.include_router(streams.router, prefix="/streams", tags=["视频流管理"])  # 新增视频流路由
 # app.include_router(charts.router, prefix="/charts", tags=["图表管理"])  # 新增图表管理路由
-app.include_router(goview.router, tags=["GoView"])  # 新增GoView路由
+app.include_router(goview.router, prefix="/goview", tags=["GoView"])  # 新增GoView路由
 
 # MongoDB连接
 client = AsyncIOMotorClient(MONGO_URL)

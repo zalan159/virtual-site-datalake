@@ -96,20 +96,7 @@
 import { PropType, ref, onMounted, watch, nextTick } from 'vue'
 import { option } from './config'
 import { CollapseItem, SettingItemBox, SettingItem } from '@/components/Pages/ChartItemSetting'
-import axios from 'axios'
-
-// 视频流接口类型定义
-interface StreamItem {
-  _id: string       // MongoDB的_id字段 (实际返回的字段)
-  name: string
-  protocol: string
-  url: string
-  username?: string
-  password?: string
-  description?: string
-  owner?: string
-  create_time?: string
-}
+import { streamsApi, type StreamItem } from '@/api/streamsApi'
 
 // 适应类型选项
 const fitList = [
@@ -161,51 +148,19 @@ const updateStreamOptions = () => {
   streamOptions.value = options
 }
 
-  // 获取URL参数中的token
-  const getTokenFromUrl = (): string | null => {
-    try {
-      // 从window.route.params获取token（GoView路由守卫已将query参数放入此处）
-      return (window as any).route?.params?.token || null
-    } catch (error) {
-      console.warn('获取URL参数中的token失败:', error)
-      return null
-    }
-  }
-
 // 获取视频流列表
 const fetchStreamList = async () => {
   loading.value = true
   console.log('=== VideoStream Config: 开始获取视频流列表 ===')
   
   try {
-    const token = getTokenFromUrl()
-    console.log('Config获取到的token:', token)
+    const data = await streamsApi.getStreamList()
+    console.log('Config API响应数据:', data)
+    console.log('Config API响应数据类型:', Array.isArray(data) ? 'Array' : typeof data)
+    console.log('Config API响应完整数据:', JSON.stringify(data, null, 2))
     
-    if (!token) {
-      console.warn('未找到token，无法获取视频流列表')
-      window['$message']?.warning('未找到认证token')
-      return
-    }
-
-    // 创建独立的axios实例，通过代理访问后端streams API
-    const apiClient = axios.create({
-      baseURL: '', // 使用当前域名，通过vite代理访问
-      timeout: 10000,
-      withCredentials: true,
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    })
-    
-    console.log('Config发送API请求: /streams/list')
-    const res = await apiClient.get<StreamItem[]>('/streams/list')
-    console.log('Config API响应状态:', res.status)
-    console.log('Config API响应数据:', res.data)
-    console.log('Config API响应数据类型:', Array.isArray(res.data) ? 'Array' : typeof res.data)
-    console.log('Config API响应完整数据:', JSON.stringify(res.data, null, 2))
-    
-    if (res.data && Array.isArray(res.data)) {
-      streamList.value = res.data
+    if (Array.isArray(data)) {
+      streamList.value = data
       console.log('Config设置streamList.value:', streamList.value)
       console.log('Config streamList长度:', streamList.value.length)
       if (streamList.value.length > 0) {
@@ -221,7 +176,7 @@ const fetchStreamList = async () => {
         console.log('Config 更新后的streamOptions:', streamOptions.value)
       })
     } else {
-      console.warn('获取视频流列表失败: 数据格式不正确', res.data)
+      console.warn('获取视频流列表失败: 数据格式不正确', data)
       window['$message']?.warning('获取视频流列表失败')
     }
   } catch (error) {

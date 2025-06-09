@@ -40,21 +40,8 @@ import { useChartDataFetch } from '@/hooks'
 import { CreateComponentType } from '@/packages/index.d'
 import { useChartEditStore } from '@/store/modules/chartEditStore/chartEditStore'
 import { option as configOption } from './config'
-import axios from 'axios'
 import Hls from 'hls.js'
-
-// 视频流接口类型定义
-interface StreamItem {
-  _id: string       // MongoDB的_id字段 (实际返回的字段)
-  name: string
-  protocol: string
-  url: string
-  username?: string
-  password?: string
-  description?: string
-  owner?: string
-  create_time?: string
-}
+import { streamsApi, type StreamItem } from '@/api/streamsApi'
 
 const props = defineProps({
   chartConfig: {
@@ -102,58 +89,26 @@ const handlePlayClick = () => {
   }
 }
 
-// 获取URL参数中的token
-const getTokenFromUrl = (): string | null => {
-  try {
-    // 从window.route.params获取token（GoView路由守卫已将query参数放入此处）
-    return (window as any).route?.params?.token || null
-  } catch (error) {
-    console.warn('获取URL参数中的token失败:', error)
-    return null
-  }
-}
-
 // 获取视频流列表
 const fetchStreamList = async () => {
   console.log('=== VideoStream Index: 开始获取视频流列表 ===')
   
   try {
-    const token = getTokenFromUrl()
-    console.log('Index获取到的token:', token)
+    const data = await streamsApi.getStreamList()
+    console.log('Index API响应数据:', data)
     
-    if (!token) {
-      console.warn('Index未找到token，无法获取视频流列表')
-      return
-    }
-
-    // 创建独立的axios实例，通过代理访问后端streams API
-    const apiClient = axios.create({
-      baseURL: '', // 使用当前域名，通过vite代理访问
-      timeout: 10000,
-      withCredentials: true,
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    })
-    
-    console.log('Index发送API请求: /streams/list')
-    const res = await apiClient.get<StreamItem[]>('/streams/list')
-    console.log('Index API响应状态:', res.status)
-    console.log('Index API响应数据:', res.data)
-    console.log('Index API响应数据类型:', Array.isArray(res.data) ? 'Array' : typeof res.data)
-    
-    if (res.data && Array.isArray(res.data)) {
-      streamList.value = res.data
+    if (Array.isArray(data)) {
+      streamList.value = data
       console.log('Index设置streamList.value:', streamList.value)
     } else {
-      console.warn('Index获取视频流列表失败: 数据格式不正确', res.data)
+      console.warn('Index获取视频流列表失败: 数据格式不正确', data)
     }
   } catch (error) {
     console.error('Index获取视频流列表异常:', error)
     if (error instanceof Error) {
       console.error('Index错误详情:', error.message)
     }
-    // 如果API调用失败，尝试使用mock数据进行测试
+    // 如果API调用失败，清空列表
     streamList.value = []
   } finally {
     console.log('=== VideoStream Index: 获取视频流列表完成 ===')

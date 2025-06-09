@@ -69,19 +69,13 @@ export default ({ mode }) => defineConfig({
     open: true,
     port: 3001,
     proxy: {
-      [axiosPre]: {
-        // @ts-ignore
-        target: loadEnv(mode, process.cwd()).VITE_DEV_PATH,
-        changeOrigin: true,
-        ws: true,
-        secure: true,
-      },
-      // 添加streams API代理
-      '/streams': {
-        target: 'http://127.0.0.1:8000',
+      // 统一的API代理规则 - 将所有/api请求代理到后端并去除/api前缀
+      '/api': {
+        target: loadEnv(mode, process.cwd()).VITE_DEV_PATH || 'http://127.0.0.1:8000',
         changeOrigin: true,
         ws: true,
         secure: false,
+        rewrite: (path) => path.replace(/^\/api/, ''),
       }
     }
   },

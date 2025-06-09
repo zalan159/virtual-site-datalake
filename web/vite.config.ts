@@ -23,16 +23,11 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000,
       proxy: {
+        // 统一的API代理 - 所有/api请求代理到后端并去除/api前缀
         '/api': {
           target: env.VITE_BASE_URL,
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api/, ''),
-        },
-        // 开发时代理goview请求
-        '/goview': {
-          target: 'http://localhost:3001',
-          changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/goview/, ''),
         },
       },
       cors: {

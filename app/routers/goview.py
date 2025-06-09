@@ -14,7 +14,7 @@ import os
 from app.core.minio_client import MinioClient
 from pydantic import BaseModel
 
-router = APIRouter(prefix="/api/goview", tags=["goview"])
+router = APIRouter(prefix="", tags=["goview"])
 minio_client = MinioClient()
 
 

@@ -1,0 +1,8 @@
+# port - GoView运行端口
+VITE_DEV_PORT = '3001'
+
+# development path - 开发环境后端API地址
+VITE_DEV_PATH = 'http://127.0.0.1:8000'
+
+# production path - 生产环境后端API地址
+VITE_PRO_PATH = 

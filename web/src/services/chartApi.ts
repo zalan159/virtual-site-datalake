@@ -90,7 +90,7 @@ const chartApi = {
   // GoView项目管理 - 使用新的API
   async createChart(data: ChartCreateRequest): Promise<Chart> {
     const token = getCurrentUserToken();
-    const response = await axiosConfig.post('/api/goview/project/create', {
+    const response = await axiosConfig.post('/goview/project/create', {
       projectName: data.name,
       remarks: data.description || ''
     }, {
@@ -113,7 +113,7 @@ const chartApi = {
     status?: string;
   }): Promise<ChartListResponse> {
     const token = getCurrentUserToken();
-    const response = await axiosConfig.get('/api/goview/project/list', {
+    const response = await axiosConfig.get('/goview/project/list', {
       params: { token }
     });
     
@@ -149,7 +149,7 @@ const chartApi = {
 
   async getChart(chartId: string): Promise<Chart> {
     const token = getCurrentUserToken();
-    const response = await axiosConfig.get('/api/goview/project/getData', {
+    const response = await axiosConfig.get('/goview/project/getData', {
       params: { projectId: chartId, token }
     });
     
@@ -182,7 +182,7 @@ const chartApi = {
     
     // 更新基础信息
     if (data.name || data.description) {
-      const response = await axiosConfig.post('/api/goview/project/edit', {
+      const response = await axiosConfig.post('/goview/project/edit', {
         id: chartId,
         projectName: data.name,
         remarks: data.description
@@ -198,7 +198,7 @@ const chartApi = {
     // 更新状态
     if (data.status) {
       const state = data.status === 'published' ? 1 : -1;
-      const response = await axiosConfig.put('/api/goview/project/publish', {
+      const response = await axiosConfig.put('/goview/project/publish', {
         id: chartId,
         state
       }, {
@@ -216,7 +216,7 @@ const chartApi = {
 
   async deleteChart(chartId: string): Promise<{ message: string }> {
     const token = getCurrentUserToken();
-    const response = await axiosConfig.delete('/api/goview/project/delete', {
+    const response = await axiosConfig.delete('/goview/project/delete', {
       params: { ids: chartId, token }
     });
     
