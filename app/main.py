@@ -12,6 +12,8 @@ from fastapi.staticfiles import StaticFiles
 from app.routers import auth, files, tasks, attachments, metadata, scene, public_models , streams
 from app.routers import iot  # 新增
 from app.routers import threedtiles  # 新增3DTiles路由
+# from app.routers import charts  # 新增图表管理路由
+from app.routers import goview  # 新增GoView路由
 from app.models.user import UserRole
 from app.auth.utils import get_password_hash
 from app.core.minio_client import check_and_create_bucket
@@ -55,7 +57,11 @@ origins = [
     "http://localhost:5173", # 允许的前端开发服务器
     "http://127.0.0.1:5173",
     "http://localhost:3000", # 添加你的前端源
-    "http://127.0.0.1:3000", 
+    "http://127.0.0.1:3000",
+    "http://localhost:3001", # GoView前端服务器
+    "http://127.0.0.1:3001",
+    "http://localhost:8000", # 允许本地后端访问
+    "http://127.0.0.1:8000",
     # 你可以添加更多的源
 ]
 
@@ -80,6 +86,8 @@ app.include_router(scene.router, prefix="", tags=["场景管理"])
 app.include_router(public_models.router, prefix="/public-models", tags=["公共模型"])  # 添加公共模型路由
 app.include_router(threedtiles.router, prefix="/3dtiles", tags=["3DTiles模型"])  # 添加3DTiles路由
 app.include_router(streams.router, prefix="/streams", tags=["视频流管理"])  # 新增视频流路由
+# app.include_router(charts.router, prefix="/charts", tags=["图表管理"])  # 新增图表管理路由
+app.include_router(goview.router, tags=["GoView"])  # 新增GoView路由
 
 # MongoDB连接
 client = AsyncIOMotorClient(MONGO_URL)

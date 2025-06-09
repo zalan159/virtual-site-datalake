@@ -52,3 +52,6 @@ VITE_BASE_URL=http://127.0.0.1:8000
 
 # vite_minio链接设置，从上方引用组成minio_url
 VITE_MINIO_URL=http://${MINIO_HOST}:${MINIO_PORT}
+
+VITE_REACT_APP_GOVIEW_EDITOR_URL=http://localhost:3001
+VITE_REACT_APP_GOVIEW_VIEWER_URL=http://localhost:3001

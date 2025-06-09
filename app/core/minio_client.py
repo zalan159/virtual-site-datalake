@@ -21,6 +21,8 @@ ATTACHMENT_BUCKET_NAME = "attachments"  # 附件存储桶
 PREVIEW_BUCKET_NAME = "preview"
 PUBLIC_MODEL_BUCKET_NAME = "public-models"  # 公共模型存储桶
 THREEDTILES_BUCKET_NAME = "threedtiles"  # 3DTiles存储桶
+CHART_PREVIEWS_BUCKET_NAME = "chart-previews"  # 图表预览图存储桶
+GOVIEW_FILES_BUCKET_NAME = "goview-files"  # GoView文件存储桶
 
 # 检查并创建MinIO bucket
 def check_and_create_bucket():
@@ -67,6 +69,20 @@ def check_and_create_bucket():
         else:
             print(f"MinIO bucket '{THREEDTILES_BUCKET_NAME}' 已存在")
 
+        # 检查并创建图表预览图存储桶
+        if not minio_client.bucket_exists(CHART_PREVIEWS_BUCKET_NAME):
+            minio_client.make_bucket(CHART_PREVIEWS_BUCKET_NAME)
+            print(f"MinIO bucket '{CHART_PREVIEWS_BUCKET_NAME}' 已创建")
+        else:
+            print(f"MinIO bucket '{CHART_PREVIEWS_BUCKET_NAME}' 已存在")
+
+        # 检查并创建GoView文件存储桶
+        if not minio_client.bucket_exists(GOVIEW_FILES_BUCKET_NAME):
+            minio_client.make_bucket(GOVIEW_FILES_BUCKET_NAME)
+            print(f"MinIO bucket '{GOVIEW_FILES_BUCKET_NAME}' 已创建")
+        else:
+            print(f"MinIO bucket '{GOVIEW_FILES_BUCKET_NAME}' 已存在")
+
         # 设置scene-preview桶为公开
         policy_readonly = {
             "Version": "2012-10-17",
@@ -111,5 +127,73 @@ def check_and_create_bucket():
         }
         minio_client.set_bucket_policy(THREEDTILES_BUCKET_NAME, json.dumps(policy_readonly_threedtiles))
         print(f"MinIO bucket '{THREEDTILES_BUCKET_NAME}' 已设置为公开")
+        
+        # 设置 chart-previews 桶为公开
+        policy_readonly_chart_previews = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {"AWS": ["*"]},
+                    "Action": ["s3:GetObject"],
+                    "Resource": [f"arn:aws:s3:::{CHART_PREVIEWS_BUCKET_NAME}/*"]
+                }
+            ]
+        }
+        minio_client.set_bucket_policy(CHART_PREVIEWS_BUCKET_NAME, json.dumps(policy_readonly_chart_previews))
+        print(f"MinIO bucket '{CHART_PREVIEWS_BUCKET_NAME}' 已设置为公开")
+        
+        # 设置 goview-files 桶为公开
+        policy_readonly_goview_files = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {"AWS": ["*"]},
+                    "Action": ["s3:GetObject"],
+                    "Resource": [f"arn:aws:s3:::{GOVIEW_FILES_BUCKET_NAME}/*"]
+                }
+            ]
+        }
+        minio_client.set_bucket_policy(GOVIEW_FILES_BUCKET_NAME, json.dumps(policy_readonly_goview_files))
+        print(f"MinIO bucket '{GOVIEW_FILES_BUCKET_NAME}' 已设置为公开")
     except Exception as e:
-        print(f"创建MinIO bucket时出错: {str(e)}") 
+        print(f"创建MinIO bucket时出错: {str(e)}")
+
+
+class MinioClient:
+    """MinIO客户端包装类"""
+    
+    def __init__(self):
+        self.client = minio_client
+    
+    def upload_file_data(self, bucket_name: str, object_name: str, file_data: bytes, content_type: str = None) -> str:
+        """上传文件数据到MinIO并返回文件URL"""
+        from io import BytesIO
+        
+        # 确保bucket存在
+        if not self.client.bucket_exists(bucket_name):
+            self.client.make_bucket(bucket_name)
+        
+        # 上传文件
+        self.client.put_object(
+            bucket_name=bucket_name,
+            object_name=object_name,
+            data=BytesIO(file_data),
+            length=len(file_data),
+            content_type=content_type
+        )
+        
+        # 返回文件URL
+        return f"http://{os.getenv('MINIO_HOST')}:{os.getenv('MINIO_PORT')}/{bucket_name}/{object_name}"
+    
+    def remove_object(self, bucket_name: str, object_name: str):
+        """删除对象"""
+        try:
+            self.client.remove_object(bucket_name, object_name)
+        except Exception as e:
+            print(f"删除对象失败: {str(e)}")
+    
+    def get_object_url(self, bucket_name: str, object_name: str) -> str:
+        """获取对象URL"""
+        return f"http://{os.getenv('MINIO_HOST')}:{os.getenv('MINIO_PORT')}/{bucket_name}/{object_name}" 

@@ -18,7 +18,7 @@ load_dotenv()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # OAuth2 scheme
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 
 # JWT配置
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
@@ -90,4 +90,22 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserInDB:
 async def get_current_active_user(current_user: UserInDB = Depends(get_current_user)) -> UserInDB:
     if not current_user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
-    return current_user 
+    return current_user
+
+async def get_current_user_optional(token: Optional[str] = Depends(oauth2_scheme)) -> Optional[dict]:
+    """可选的用户认证，不会抛出异常"""
+    if not token:
+        return None
+    
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        
+        if username:
+            # 从数据库获取完整用户信息
+            user = await get_user(username)
+            if user:
+                return {"username": user.username, "user_id": user.id}
+        return None
+    except JWTError:
+        return None 

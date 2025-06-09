@@ -26,6 +26,7 @@ import UserSubscriptions from '../pages/Data/Subscriptions';
 import VideoData from '../pages/Data/VideoData';
 import GISData from '../pages/Data/GISData';
 import ERPData from '../pages/Data/ERPData';
+import ChartData from '../pages/Data/ChartData';
 import UserSettings from '../pages/UserSettings';
 import SceneList from '../pages/Scenes/SceneList';
 // import SceneEditor from '../pages/Scenes/SceneEditor';
@@ -34,6 +35,8 @@ import DataTemplate from '../pages/Data/DataTemplate';
 // import AgentPage from '../pages/Agent';
 import ModelInstances from '../pages/Data/ModelInstances';
 import SceneEditorStandalone from '../pages/Scenes/SceneEditorStandalone';
+import ChartEditorStandalone from '../pages/ChartEditorStandalone';
+import ChartPreviewStandalone from '../pages/ChartPreviewStandalone';
 // import AdminIndex from '../pages/Admin';
 import PublicModels from '../pages/Admin/PublicModels';
 import UserPublicModels from '../pages/Models/PublicModels';
@@ -154,6 +157,12 @@ export const routeConfig: RouteItem[] = [
         icon: <AppstoreOutlined />,
         component: ModelInstances,
       },
+      {
+        path: '/data/charts',
+        name: '图表页管理',
+        icon: <AppstoreOutlined />,
+        component: ChartData,
+      },
     ],
   },
   // {
@@ -207,6 +216,14 @@ export const specialRoutes = [
   {
     path: '/tileset-viewer',
     component: TilesetViewer,
+  },
+  {
+    path: '/chart-editor/:chartId',
+    component: ChartEditorStandalone,
+  },
+  {
+    path: '/chart-preview/:chartId',
+    component: ChartPreviewStandalone,
   },
 ];
 
