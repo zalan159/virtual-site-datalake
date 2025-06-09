@@ -11,6 +11,13 @@ http://www.virtual-site.com:3000
 演示视频：
 https://www.bilibili.com/video/BV1cu7VziEty
 
+## 更新 集成goview图表编辑器，链接到现有灵境孪生中台，在goview中新建视频流播放器，接收灵境中台中的视频流数据。
+更新功能：
+<img width="1906" alt="image" src="https://github.com/user-attachments/assets/279e483b-9a27-4fcf-ac9f-f17b7d6bd6fe" />
+<img width="1900" alt="image" src="https://github.com/user-attachments/assets/64004fc6-b5c1-4d9b-9d4a-c421ab5586d9" />
+
+
+
 ## 项目目标
 
 为数字孪生场景和客户端提供统一的数据服务，整合3D模型、IoT、视频流、GIS、附件等多源异构数据，实现数据标准化、统一管理和灵活绑定，支撑数字孪生场景的构建、可视化和智能化。
@@ -249,4 +256,4 @@ https://github.com/user-attachments/assets/100a5935-31ec-4698-ae4a-0e95752661e9
 5. 格式转换程序是否正确配置
 # 加入开发者社区
 
-<img src="https://github.com/user-attachments/assets/55417cbd-7c47-489f-bc8a-106439e0be36" alt="image" width="30%" />
+<img src="https://github.com/user-attachments/assets/ce19b80a-e830-43e3-b2a4-d0cb1f669f2c" alt="image" width="30%" />
