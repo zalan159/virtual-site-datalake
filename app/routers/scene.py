@@ -28,8 +28,10 @@ async def create_scene(
         scene.origin = data.origin
     else:
         scene.origin = {"longitude": 113, "latitude": 23, "height": 50}
+    if data.chart_binds:
+        scene.chart_binds = data.chart_binds
     scene.save()
-    return {"uid": scene.uid, "name": scene.name, "owner": scene.owner, "origin": scene.origin}
+    return {"uid": scene.uid, "name": scene.name, "owner": scene.owner, "origin": scene.origin, "chart_binds": getattr(scene, 'chart_binds', [])}
 
 @router.get("/scenes", response_model=List[dict])
 async def list_scenes(current_user: UserInDB = Depends(get_current_active_user)):
@@ -89,6 +91,11 @@ async def get_scene(scene_id: str, current_user: UserInDB = Depends(get_current_
                 "latitude": {"display_name": "纬度", "type": "number", "min": -90, "max": 90},
                 "height": {"display_name": "高程", "type": "number", "min": -10000, "max": 10000}
             }
+        },
+        "chart_binds": {
+            "display_name": "图表绑定",
+            "editable": True,
+            "type": "array"
         }
     }
     
@@ -100,7 +107,8 @@ async def get_scene(scene_id: str, current_user: UserInDB = Depends(get_current_
         "updated_at": getattr(scene, 'updated_at', None),
         "owner": getattr(scene, 'owner', None),
         "origin": getattr(scene, 'origin', None),
-        "preview_image": getattr(scene, 'preview_image', None)
+        "preview_image": getattr(scene, 'preview_image', None),
+        "chart_binds": getattr(scene, 'chart_binds', [])
     }
     
     # 返回带元数据的结果
@@ -123,7 +131,7 @@ async def update_scene(scene_id: str, data: SceneUpdate, current_user: UserInDB 
     scene.updated_at = datetime.utcnow()
     scene.save()
     # 返回所有可见字段
-    return {"uid": scene.uid, "name": scene.name, "updated_at": scene.updated_at, "origin": getattr(scene, 'origin', None), "owner": getattr(scene, 'owner', None)}
+    return {"uid": scene.uid, "name": scene.name, "updated_at": scene.updated_at, "origin": getattr(scene, 'origin', None), "owner": getattr(scene, 'owner', None), "chart_binds": getattr(scene, 'chart_binds', [])}
 
 @router.delete("/scenes/{scene_id}", response_model=dict)
 async def delete_scene(scene_id: str, current_user: UserInDB = Depends(get_current_active_user)):
@@ -419,7 +427,7 @@ async def get_instance_properties(instance_id: str, current_user: UserInDB = Dep
             "asset_metadata": {
                 "display_name": "资产元数据",
                 "editable": False,
-                "type": "object"
+                "type": "array"
             },
             
             # 第二组：实例数据（可编辑）
@@ -473,13 +481,22 @@ async def get_instance_properties(instance_id: str, current_user: UserInDB = Dep
         }
     }
     
+    # 获取资产元数据
+    asset_metadata_list = []
+    if inst.asset_id:
+        cursor = db.metadata.find({"file_id": inst.asset_id})
+        asset_metadata_list = await cursor.to_list(length=None)
+        for item in asset_metadata_list:
+            if '_id' in item and isinstance(item['_id'], ObjectId):
+                item['_id'] = str(item['_id'])
+
     # 构建实例数据，并分组
     instance_data = {
         # 资产数据组
         "asset": {
             "asset_id": inst.asset_id,
             "asset_type": inst.asset_type,
-            "asset_metadata": {}  # 为空，需要另行懒加载
+            "asset_metadata": asset_metadata_list
         },
         
         # 实例数据组

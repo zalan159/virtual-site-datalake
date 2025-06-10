@@ -2,7 +2,10 @@
   <div
     class="chart-item"
     v-for="(item, index) in chartEditStore.componentList"
-    :class="animationsClass(item.styles.animations)"
+    :class="[
+      animationsClass(item.styles.animations),
+      { 'is-background': item.chartConfig.chartKey === 'VBGBox' }
+    ]"
     :key="item.id"
     :style="{
       ...getComponentAttrStyle(item.attr, index),
@@ -84,5 +87,6 @@ onMounted(() => {
 <style lang="scss" scoped>
 .chart-item {
   position: absolute;
+  color-scheme: light;
 }
 </style>

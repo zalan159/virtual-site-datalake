@@ -5,6 +5,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { subscriptionAPI, UserTopicSubscription } from '../services/iotService';
 import { streamApi, Stream } from '../services/streamApi';
 import { attachmentApi, Attachment } from '../services/attachmentApi';
+import chartApi, { Chart } from '../services/chartApi';
 import { updateInstanceProperties } from '../services/sceneApi';
 import StringField from './fields/StringField';
 import TextField from './fields/TextField';
@@ -17,6 +18,7 @@ import TransformField from './fields/TransformField';
 import GenericObjectField from './fields/GenericObjectField';
 import ArrayField from './fields/ArrayField';
 import BindingField from './fields/BindingField';
+import JsonTreeField from './fields/JsonTreeField';
 
 const { Panel } = Collapse;
 
@@ -43,7 +45,7 @@ export interface DynamicPropertyFormProps {
   metadata: {
     groups?: MetadataGroup[];
     fields: { [key: string]: FieldMetadata };
-  };
+  } | { [key: string]: FieldMetadata };
   loading?: boolean;
   onSave?: (values: any) => Promise<void>;
   onRefresh?: () => void;
@@ -54,6 +56,15 @@ export interface DynamicPropertyFormProps {
   isPickingOrigin?: boolean;
   pickedOrigin?: { longitude: number; latitude: number; height: number } | null;
 }
+
+// 类型守卫函数
+const hasGroupsAndFields = (metadata: any): metadata is { groups?: MetadataGroup[]; fields: { [key: string]: FieldMetadata } } => {
+  return metadata && typeof metadata === 'object' && ('fields' in metadata || 'groups' in metadata);
+};
+
+const isDirectFieldsObject = (metadata: any): metadata is { [key: string]: FieldMetadata } => {
+  return metadata && typeof metadata === 'object' && !('fields' in metadata) && !('groups' in metadata);
+};
 
 const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
   entityId,
@@ -73,14 +84,28 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
   const [saving, setSaving] = useState(false);
   const { message } = AntdApp.useApp();
 
-  const [bindModalType, setBindModalType] = useState<'iot' | 'video' | 'file' | null>(null);
+  const [bindModalType, setBindModalType] = useState<'iot' | 'video' | 'file' | 'chart' | null>(null);
   const [bindList, setBindList] = useState<any[]>([]);
   const [bindSelectedKeys, setBindSelectedKeys] = useState<string[]>([]);
 
   useEffect(() => {
-    setFormValues(data || {});
-    form.setFieldsValue(data || {});
-  }, [data, form]);
+    const newFormValues = data || {};
+    setFormValues(newFormValues);
+    
+    // 根据metadata类型设置表单初始值
+    if (hasGroupsAndFields(metadata) && metadata.groups) {
+      // 对于分组数据，设置嵌套的表单值
+      const nestedFormValues: any = {};
+      metadata.groups.forEach(group => {
+        const groupData = newFormValues[group.id] || {};
+        nestedFormValues[group.id] = groupData;
+      });
+      form.setFieldsValue(nestedFormValues);
+    } else {
+      // 对于非分组数据，直接设置表单值
+      form.setFieldsValue(newFormValues);
+    }
+  }, [data, form, metadata]);
 
   const handleSave = async () => {
     if (!onSave) return;
@@ -105,7 +130,7 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
     return fakeUrl;
   };
 
-  const openBindModal = async (type: 'iot' | 'video' | 'file') => {
+  const openBindModal = async (type: 'iot' | 'video' | 'file' | 'chart') => {
     try {
       let list: any[] = [];
       if (type === 'iot') {
@@ -120,6 +145,10 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
         const data = await attachmentApi.getList();
         list = data || [];
         setBindSelectedKeys(formValues.file_binds || []);
+      } else if (type === 'chart') {
+        const res = await chartApi.getChartList();
+        list = res.charts || [];
+        setBindSelectedKeys(formValues.chart_binds || []);
       }
       setBindList(list);
       setBindModalType(type);
@@ -130,14 +159,28 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
 
   const handleBindOk = async () => {
     if (!bindModalType) return;
-    const field = bindModalType === 'iot' ? 'iot_binds' : bindModalType === 'video' ? 'video_binds' : 'file_binds';
-    try {
-      await updateInstanceProperties(entityId, { [field]: bindSelectedKeys });
+    
+    // 确定是实例属性还是场景属性
+    const isInstanceBinding = ['iot', 'video', 'file'].includes(bindModalType);
+    
+    if (isInstanceBinding) {
+      const field = bindModalType === 'iot' ? 'iot_binds' : bindModalType === 'video' ? 'video_binds' : 'file_binds';
+      try {
+        await updateInstanceProperties(entityId, { [field]: bindSelectedKeys });
+        handleFieldChange(field, bindSelectedKeys);
+        message.success('绑定成功');
+      } catch (err) {
+        message.error('绑定失败');
+      } finally {
+        setBindModalType(null);
+      }
+    } else if (bindModalType === 'chart') {
+      // 对于图表绑定，只更新表单状态，由用户手动保存
+      const field = 'chart_binds';
       handleFieldChange(field, bindSelectedKeys);
-      message.success('绑定成功');
-    } catch (err) {
-      message.error('绑定失败');
-    } finally {
+      // 更新 antd Form 的值，以便UI能正确响应
+      form.setFieldsValue({ [field]: bindSelectedKeys });
+      message.info('图表选择已更新，请点击"保存"按钮来生效。');
       setBindModalType(null);
     }
   };
@@ -161,6 +204,13 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
         { title: '扩展名', dataIndex: 'extension' },
       ];
     }
+    if (bindModalType === 'chart') {
+      return [
+        { title: '图表名称', dataIndex: 'name' },
+        { title: 'ID', dataIndex: 'uid' },
+        { title: '状态', dataIndex: 'status' },
+      ];
+    }
     return [];
   };
 
@@ -173,6 +223,10 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
         return <img src={value || '/logoonly.png'} style={{ width: 200 }} />;
       case 'boolean':
         return <span>{value ? '是' : '否'}</span>;
+      case 'object':
+      case 'array':
+        // 使用JsonTreeField的纯模式，避免双重Form.Item包装
+        return <JsonTreeField fieldName={fieldName} value={value} meta={meta} pure={true} />;
       default:
         return <span>{String(value)}</span>;
     }
@@ -183,14 +237,15 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
     value: any,
     meta: FieldMetadata,
     onChange: (val: any) => void,
+    groupId?: string,
   ) => {
     switch (meta.type) {
       case 'string':
-        return <StringField fieldName={fieldName} value={value} meta={meta} onChange={onChange} />;
+        return <StringField fieldName={fieldName} value={value} meta={meta} onChange={onChange} groupId={groupId} />;
       case 'text':
         return <TextField fieldName={fieldName} value={value} meta={meta} onChange={onChange} />;
       case 'number':
-        return <NumberField fieldName={fieldName} value={value} meta={meta} onChange={onChange} />;
+        return <NumberField fieldName={fieldName} value={value} meta={meta} onChange={onChange} groupId={groupId} />;
       case 'boolean':
         return <BooleanField fieldName={fieldName} value={value} meta={meta} onChange={onChange} />;
       case 'datetime':
@@ -223,28 +278,30 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
         if (fieldName === 'transform') {
           return <TransformField fieldName={fieldName} value={value} meta={meta} onChange={onChange} />;
         }
-        return <GenericObjectField fieldName={fieldName} value={value} meta={meta} onChange={onChange} />;
+        // 对于其他对象类型，使用JsonTreeField
+        return <JsonTreeField fieldName={fieldName} value={value} meta={meta} onChange={onChange} groupId={groupId} />;
       case 'array':
-        if (['iot_binds', 'video_binds', 'file_binds'].includes(fieldName)) {
-          const type = fieldName === 'iot_binds' ? 'iot' : fieldName === 'video_binds' ? 'video' : 'file';
+        if (['iot_binds', 'video_binds', 'file_binds', 'chart_binds'].includes(fieldName)) {
+          const type = fieldName === 'iot_binds' ? 'iot' : 
+                       fieldName === 'video_binds' ? 'video' :
+                       fieldName === 'chart_binds' ? 'chart' : 'file';
           return <BindingField fieldName={fieldName} value={value} meta={meta} onOpen={() => openBindModal(type)} />;
         }
         return <ArrayField fieldName={fieldName} value={value} meta={meta} onChange={onChange} />;
       default:
-        return <StringField fieldName={fieldName} value={value} meta={meta} onChange={onChange} />;
+        return <StringField fieldName={fieldName} value={value} meta={meta} onChange={onChange} groupId={groupId} />;
     }
   };
 
-  const renderField = (fieldName: string, value: any, meta: FieldMetadata, onChange: (val: any) => void) => {
-    const itemProps = { label: fieldName, name: fieldName };
+  const renderField = (fieldName: string, value: any, meta: FieldMetadata, onChange: (val: any) => void, groupId?: string) => {
     if (!meta.editable) {
       return (
-        <Form.Item key={fieldName} label={meta.display_name} name={fieldName}>
+        <Form.Item key={fieldName} label={meta.display_name} name={groupId ? [groupId, fieldName] : fieldName}>
           {renderReadOnlyValue(fieldName, value, meta)}
         </Form.Item>
       );
     }
-    return <React.Fragment key={fieldName}>{renderEditableField(fieldName, value, meta, onChange)}</React.Fragment>;
+    return <React.Fragment key={fieldName}>{renderEditableField(fieldName, value, meta, onChange, groupId)}</React.Fragment>;
   };
 
   const renderGroup = (group: MetadataGroup, index: number) => {
@@ -252,15 +309,29 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
       <Panel header={group.name} key={index.toString()}>
         <Form form={form} layout="horizontal" labelCol={{ span: 6 }} wrapperCol={{ span: 18 }} initialValues={formValues}>
           {group.fields.map((fieldName) => {
-            const meta = metadata.fields[fieldName];
+            // 使用类型守卫来安全访问字段元数据
+            let meta: FieldMetadata | undefined;
+            if (hasGroupsAndFields(metadata)) {
+              meta = metadata.fields[fieldName];
+            } else if (isDirectFieldsObject(metadata)) {
+              meta = metadata[fieldName];
+            }
+            
             if (!meta) return null;
+            
+            // 修复分组数据的字段值获取逻辑
             const groupData = formValues[group.id] || {};
-            const value = fieldName in groupData ? groupData[fieldName] : formValues[fieldName];
+            const value = groupData[fieldName]; // 分组数据中的字段值
+            
             const handleChange = (val: any) => {
-              const newGroup = { ...groupData, [fieldName]: val };
-              handleFieldChange(group.id, newGroup);
+              // 更新分组数据
+              const newGroupData = { ...groupData, [fieldName]: val };
+              handleFieldChange(group.id, newGroupData);
+              // 同时更新表单字段值，确保表单能正确显示
+              form.setFieldValue([group.id, fieldName], val);
             };
-            return renderField(fieldName, value, meta, handleChange);
+            
+            return renderField(fieldName, value, meta, handleChange, group.id);
           })}
         </Form>
       </Panel>
@@ -277,12 +348,22 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
         children: (
           <>
             <Form form={form} layout="horizontal" labelCol={{ span: 6 }} wrapperCol={{ span: 18 }} initialValues={formValues}>
-              {metadata && metadata.fields ? (
-                Object.keys(metadata.fields).map((fieldName) => {
-                  const meta = metadata.fields[fieldName];
-                  const value = formValues[fieldName];
-                  return renderField(fieldName, value, meta, (val) => handleFieldChange(fieldName, val));
-                })
+              {metadata ? (
+                // 支持两种格式：新格式（后端返回的直接字段对象）和旧格式（metadata.fields）
+                (() => {
+                  let fields: { [key: string]: FieldMetadata } = {};
+                  if (hasGroupsAndFields(metadata)) {
+                    fields = metadata.fields;
+                  } else if (isDirectFieldsObject(metadata)) {
+                    fields = metadata;
+                  }
+                  
+                  return Object.keys(fields).map((fieldName) => {
+                    const meta = fields[fieldName];
+                    const value = formValues[fieldName];
+                    return renderField(fieldName, value, meta, (val) => handleFieldChange(fieldName, val));
+                  });
+                })()
               ) : (
                 <div style={{ padding: '20px', textAlign: 'center' }}>没有可用的属性字段。</div>
               )}
@@ -300,7 +381,7 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
 
   return (
     <Spin spinning={loading || saving}>
-      {metadata?.groups ? (
+      {hasGroupsAndFields(metadata) && metadata.groups ? (
         <Collapse defaultActiveKey={['0']} style={{ marginBottom: 16 }}>
           {metadata.groups.map((g, i) => renderGroup(g, i))}
         </Collapse>
@@ -309,7 +390,7 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
       )}
       <Modal title="选择绑定项" open={!!bindModalType} onOk={handleBindOk} onCancel={() => setBindModalType(null)} destroyOnClose>
         <Table
-          rowKey="_id"
+          rowKey={bindModalType === 'chart' ? 'uid' : '_id'}
           dataSource={bindList}
           columns={bindColumns()}
           rowSelection={{ selectedRowKeys: bindSelectedKeys, onChange: (keys) => setBindSelectedKeys(keys as string[]) }}

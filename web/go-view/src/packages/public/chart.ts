@@ -21,7 +21,9 @@ export const mergeTheme = <T, U>(option: T, themeSetting: U, includes: string[])
  * @return option
  */
 export const echartOptionProfixHandle = (option: any, includes: string[]) => {
-  option['backgroundColor'] = 'rgba(0,0,0,0)'
+  option['backgroundColor'] = 'transparent'
+  // 在预览模式下，强制禁用 ECharts 自身的暗黑模式，以确保颜色完全由主题文件控制
+  option['darkMode'] = false
   return mergeTheme(option, globalThemeJson, includes)
 }
 

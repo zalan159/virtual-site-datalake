@@ -78,6 +78,27 @@ export function buildGoViewEditorUrl(chartId: string, token?: string): string {
 }
 
 /**
+ * 构建GoView图表预览URL
+ */
+export function buildGoViewChartPreviewUrl(chartId: string, options: { token?: string, transparentBg?: boolean } = {}): string {
+  const config = getGoViewIframeConfig();
+  const params = new URLSearchParams();
+  
+  if (options.token) {
+    params.set('token', options.token);
+  }
+  if (options.transparentBg) {
+    params.set('transparentBg', 'true');
+  }
+  
+  const queryString = params.toString();
+  const separator = queryString ? '?' : '';
+  
+  // 使用 /#/chart/preview/ 路由
+  return `${config.viewerUrl}/#/chart/preview/${chartId}${separator}${queryString}`;
+}
+
+/**
  * 构建GoView预览器URL  
  */
 export function buildGoViewViewerUrl(projectId: string, token?: string): string {
