@@ -150,3 +150,15 @@ keyRecordHandle()
   }
 }
 </style>
+
+<style>
+html {
+  /* 支持亮色和暗色模式，保持背景透明 */
+  color-scheme: light dark;
+  /* 再次确保背景是透明的 */
+  background: transparent !important;
+}
+body {
+  background: transparent !important;
+}
+</style>

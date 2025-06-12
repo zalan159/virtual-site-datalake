@@ -4,10 +4,8 @@ import { VideoStreamConfig } from './index'
 import cloneDeep from 'lodash/cloneDeep'
 
 export const option = {
-  // HLS视频流地址（输入框）
+  // 视频流地址（统一存储，可通过输入框或选择框设置）
   dataset: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-  // 选择框视频源ID（从后端获取的视频流）
-  selectedStreamId: '',
   // 循环播放
   loop: false,
   // 静音

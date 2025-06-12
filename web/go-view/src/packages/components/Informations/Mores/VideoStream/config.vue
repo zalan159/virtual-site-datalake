@@ -3,28 +3,26 @@
 <template>
   <collapse-item name="视频流" expanded>
     <setting-item-box name="视频源" alone>
-      <setting-item name="自定义地址" alone>
+      <setting-item name="视频流地址" alone>
         <n-input 
           v-model:value="optionData.dataset" 
           size="small"
-          placeholder="优先级最高，留空则使用下拉选择"
+          placeholder="请输入视频流地址或从下拉框选择"
           clearable
         ></n-input>
       </setting-item>
-      <setting-item name="选择视频流" alone>
+      <setting-item name="快速选择" alone>
         <div style="display: flex; gap: 8px; align-items: center;">
           <n-select 
-            v-model:value="optionData.selectedStreamId" 
+            :value="null"
             :key="selectKey"
             size="small"
-            placeholder="从后端获取的视频流"
+            placeholder="从后端选择视频流（将更新上方地址）"
             :options="streamOptions"
             :loading="loading"
-            :disabled="!!optionData.dataset?.trim()"
             clearable
             style="flex: 1;"
             @update:value="handleStreamSelect"
-
           />
           <n-button 
             size="small" 
@@ -36,7 +34,6 @@
           </n-button>
         </div>
       </setting-item>
-
     </setting-item-box>
 
     <setting-item-box name="播放控制">
@@ -201,6 +198,19 @@ const refreshStreamList = () => {
 // 处理视频流选择
 const handleStreamSelect = (value: string | null) => {
   console.log('Config选择了视频流:', value)
+  
+  if (value && streamList.value.length > 0) {
+    // 根据选中的ID找到对应的视频流对象
+    const selectedStream = streamList.value.find(stream => stream._id === value)
+    if (selectedStream && selectedStream.url) {
+      // 直接更新dataset字段
+      props.optionData.dataset = selectedStream.url
+      console.log('Config更新视频流地址为:', selectedStream.url)
+    } else {
+      console.warn('Config未找到对应的视频流或URL为空')
+    }
+  }
+  // 注意：不清空dataset，让用户可以手动删除
 }
 
 // 监控streamOptions变化

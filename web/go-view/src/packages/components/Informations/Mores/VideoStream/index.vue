@@ -41,7 +41,6 @@ import { CreateComponentType } from '@/packages/index.d'
 import { useChartEditStore } from '@/store/modules/chartEditStore/chartEditStore'
 import { option as configOption } from './config'
 import Hls from 'hls.js'
-import { streamsApi, type StreamItem } from '@/api/streamsApi'
 
 const props = defineProps({
   chartConfig: {
@@ -56,7 +55,6 @@ let option = shallowReactive({ ...configOption })
 const vVideoRef = ref<HTMLVideoElement | null>(null)
 const loading = ref(false)
 const error = ref('')
-const streamList = ref<StreamItem[]>([])
 let hls: Hls | null = null
 
 // 处理视频错误
@@ -89,49 +87,18 @@ const handlePlayClick = () => {
   }
 }
 
-// 获取视频流列表
-const fetchStreamList = async () => {
-  console.log('=== VideoStream Index: 开始获取视频流列表 ===')
-  
-  try {
-    const data = await streamsApi.getStreamList()
-    console.log('Index API响应数据:', data)
-    
-    if (Array.isArray(data)) {
-      streamList.value = data
-      console.log('Index设置streamList.value:', streamList.value)
-    } else {
-      console.warn('Index获取视频流列表失败: 数据格式不正确', data)
-    }
-  } catch (error) {
-    console.error('Index获取视频流列表异常:', error)
-    if (error instanceof Error) {
-      console.error('Index错误详情:', error.message)
-    }
-    // 如果API调用失败，清空列表
-    streamList.value = []
-  } finally {
-    console.log('=== VideoStream Index: 获取视频流列表完成 ===')
-  }
-}
+// 注释：删除了fetchStreamList函数，因为现在直接使用dataset字段，不需要API请求
 
-// 获取最终的视频URL（优先级：输入框 > 选择框）
+// 获取最终的视频URL
 const getFinalVideoUrl = (): string => {
-  // 优先使用输入框的URL
+  // 直接使用dataset字段
+  console.log('getFinalVideoUrl - 当前option.dataset:', option.dataset)
   if (option.dataset && option.dataset.trim()) {
+    console.log('getFinalVideoUrl - 返回URL:', option.dataset.trim())
     return option.dataset.trim()
   }
   
-  // 如果输入框为空，使用选择框的视频流
-  if (option.selectedStreamId && streamList.value.length > 0) {
-    const selectedStream = streamList.value.find(stream => 
-      stream._id === option.selectedStreamId
-    )
-    if (selectedStream && selectedStream.url) {
-      return selectedStream.url
-    }
-  }
-  
+  console.log('getFinalVideoUrl - 没有有效的dataset，返回空字符串')
   return ''
 }
 
@@ -219,8 +186,10 @@ const initHlsPlayer = (url: string) => {
 
 // 预览更新
 useChartDataFetch(props.chartConfig, useChartEditStore, (newData: any) => {
+  console.log('useChartDataFetch 收到新数据:', newData)
   option = newData
   const finalUrl = getFinalVideoUrl()
+  console.log('useChartDataFetch 获取到的finalUrl:', finalUrl)
   if (finalUrl) {
     initHlsPlayer(finalUrl)
   }
@@ -251,12 +220,19 @@ watch(
 )
 
 // 组件挂载时初始化
-onMounted(async () => {
-  // 先获取视频流列表
-  await fetchStreamList()
+onMounted(() => {
+  console.log('组件挂载 - props.chartConfig:', props.chartConfig)
+  console.log('组件挂载 - 当前option:', option)
   
-  // 然后初始化播放器
+  // 确保使用最新的配置数据
+  if (props.chartConfig.option) {
+    option = { ...option, ...props.chartConfig.option }
+    console.log('组件挂载 - 更新后的option:', option)
+  }
+  
+  // 直接初始化播放器
   const finalUrl = getFinalVideoUrl()
+  console.log('组件挂载 - 获取到的finalUrl:', finalUrl)
   if (finalUrl) {
     initHlsPlayer(finalUrl)
   }

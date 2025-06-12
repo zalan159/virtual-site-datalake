@@ -1,6 +1,6 @@
 # GoView 组件开发指南
 
-本文档总结了如何在 GoView 项目中开发自定义组件的完整流程，以视频流组件为例。
+本文档总结了如何在 GoView 项目中开发自定义组件的完整流程和最佳实践。
 
 ## 📋 目录
 
@@ -10,7 +10,8 @@
 4. [核心概念](#核心概念)
 5. [开发实践](#开发实践)
 6. [注意事项](#注意事项)
-7. [调试技巧](#调试技巧)
+7. [常见问题和解决方案](#常见问题和解决方案)
+8. [调试技巧](#调试技巧)
 
 ## 🏗️ 项目结构理解
 
@@ -28,7 +29,7 @@ src/packages/components/
 └── Tables/          # 表格组件
 ```
 
-### 信息组件子分类
+### 子分类结构
 
 以信息组件为例，进一步分为子类：
 
@@ -48,7 +49,7 @@ Informations/
 在相应的分类下创建组件文件夹：
 
 ```bash
-mkdir -p src/packages/components/Informations/Mores/VideoStream
+mkdir -p src/packages/components/[类别]/[子类别]/[组件名]
 ```
 
 ### 第二步：创建必需文件
@@ -56,7 +57,7 @@ mkdir -p src/packages/components/Informations/Mores/VideoStream
 每个组件需要以下4个核心文件：
 
 ```
-VideoStream/
+ComponentName/
 ├── index.ts         # 组件配置声明
 ├── index.vue        # 组件渲染模板
 ├── config.ts        # 数据配置类
@@ -67,7 +68,7 @@ VideoStream/
 
 ```bash
 # 将图标放在对应的图片目录
-cp video_stream.png src/assets/images/chart/informations/
+cp component_icon.png src/assets/images/chart/[类别]/
 ```
 
 ### 第四步：注册组件
@@ -75,10 +76,10 @@ cp video_stream.png src/assets/images/chart/informations/
 在相应的 `index.ts` 文件中导出组件配置：
 
 ```typescript
-// src/packages/components/Informations/Mores/index.ts
-import { VideoStreamConfig } from './VideoStream/index'
+// src/packages/components/[类别]/[子类别]/index.ts
+import { ComponentConfig } from './ComponentName/index'
 
-export default [...otherConfigs, VideoStreamConfig]
+export default [...otherConfigs, ComponentConfig]
 ```
 
 ## 📁 文件结构和功能
@@ -89,22 +90,22 @@ export default [...otherConfigs, VideoStreamConfig]
 import { ConfigType, PackagesCategoryEnum, ChartFrameEnum } from '@/packages/index.d'
 import { ChatCategoryEnum, ChatCategoryEnumName } from '../../index.d'
 
-export const VideoStreamConfig: ConfigType = {
-  key: 'VideoStream',              // 唯一标识符
-  chartKey: 'VVideoStream',        // 渲染组件名 (V + key)
-  conKey: 'VCVideoStream',         // 配置组件名 (VC + key)
-  title: '视频流',                 // 显示名称
-  category: ChatCategoryEnum.MORE, // 子分类
-  categoryName: ChatCategoryEnumName.MORE,
-  package: PackagesCategoryEnum.INFORMATIONS, // 包分类
-  chartFrame: ChartFrameEnum.COMMON,          // 框架类型
-  image: 'video_stream.png'                   // 组件图标
+export const ComponentConfig: ConfigType = {
+  key: 'ComponentName',              // 唯一标识符
+  chartKey: 'VComponentName',        // 渲染组件名 (V + key)
+  conKey: 'VCComponentName',         // 配置组件名 (VC + key)
+  title: '组件显示名称',              // 显示名称
+  category: ChatCategoryEnum.XXX,    // 子分类
+  categoryName: ChatCategoryEnumName.XXX,
+  package: PackagesCategoryEnum.XXX, // 包分类
+  chartFrame: ChartFrameEnum.COMMON, // 框架类型
+  image: 'component_icon.png'        // 组件图标
 }
 ```
 
 **关键点：**
 - `key` 必须与文件夹名称一致
-- `chartKey` 和 `conKey` 有固定的命名规范
+- `chartKey` 和 `conKey` 有固定的命名规范（V + key, VC + key）
 - `chartFrame` 分为 `ECHARTS` 和 `COMMON` 两种类型
 
 ### 2. config.ts - 数据配置类
@@ -112,21 +113,20 @@ export const VideoStreamConfig: ConfigType = {
 ```typescript
 import { PublicConfigClass } from '@/packages/public'
 import { CreateComponentType } from '@/packages/index.d'
-import { VideoStreamConfig } from './index'
+import { ComponentConfig } from './index'
 import cloneDeep from 'lodash/cloneDeep'
 
 // 默认配置选项
 export const option = {
-  dataset: 'https://example.com/stream.m3u8',
-  loop: false,
-  muted: false,
-  // ... 其他配置项
+  // 组件的配置项
+  dataset: '',
+  // 其他配置...
 }
 
 // 配置类
 export default class Config extends PublicConfigClass implements CreateComponentType {
-  public key = VideoStreamConfig.key
-  public chartConfig = cloneDeep(VideoStreamConfig)
+  public key = ComponentConfig.key
+  public chartConfig = cloneDeep(ComponentConfig)
   public option = cloneDeep(option)
 }
 ```
@@ -140,13 +140,13 @@ export default class Config extends PublicConfigClass implements CreateComponent
 
 ```vue
 <template>
-  <div class="go-video-stream">
+  <div class="go-component-name">
     <!-- 组件内容 -->
   </div>
 </template>
 
 <script setup lang="ts">
-import { PropType, toRefs, shallowReactive } from 'vue'
+import { PropType, toRefs, shallowReactive, onMounted } from 'vue'
 import { useChartDataFetch } from '@/hooks'
 import { CreateComponentType } from '@/packages/index.d'
 import { useChartEditStore } from '@/store/modules/chartEditStore/chartEditStore'
@@ -165,6 +165,16 @@ let option = shallowReactive({ ...configOption })
 // 数据更新处理
 useChartDataFetch(props.chartConfig, useChartEditStore, (newData: any) => {
   option = newData
+  // 处理数据更新逻辑
+})
+
+// 组件挂载时初始化
+onMounted(() => {
+  // 确保使用最新的配置数据
+  if (props.chartConfig.option) {
+    option = { ...option, ...props.chartConfig.option }
+  }
+  // 初始化逻辑
 })
 </script>
 ```
@@ -173,6 +183,7 @@ useChartDataFetch(props.chartConfig, useChartEditStore, (newData: any) => {
 - 必须接收 `chartConfig` prop
 - 使用 `useChartDataFetch` 处理数据更新
 - 使用 `shallowReactive` 提高性能
+- 在 `onMounted` 中确保正确初始化
 
 ### 4. config.vue - 设置界面
 
@@ -182,6 +193,7 @@ useChartDataFetch(props.chartConfig, useChartEditStore, (newData: any) => {
     <setting-item-box name="配置分组">
       <setting-item name="配置项">
         <!-- 具体的配置控件 -->
+        <n-input v-model:value="optionData.dataset" />
       </setting-item>
     </setting-item-box>
   </collapse-item>
@@ -236,14 +248,14 @@ const props = defineProps({
 使用 SCSS 和 BEM 命名规范：
 
 ```scss
-@include go('video-stream') {
-  &-player {
+@include go('component-name') {
+  &-element {
     width: 100%;
     height: 100%;
   }
   
-  &-loading {
-    // 加载状态样式
+  &-modifier {
+    // 修饰器样式
   }
 }
 ```
@@ -290,7 +302,7 @@ const handleError = (error: string) => {
 // 定义清晰的接口类型
 interface ComponentOption {
   dataset: string
-  loop: boolean
+  enabled: boolean
   // ... 其他配置
 }
 
@@ -315,16 +327,18 @@ const res = await get<{code: number, data: DataType[]}>('/api')
 
 ### 3. 跨域和安全
 
-- 视频组件需要设置 `crossOrigin="anonymous"`
-- API调用需要处理CORS问题
+- 需要处理CORS问题
 - 避免在客户端暴露敏感信息
+- 对用户输入进行验证和清理
 
 ### 4. 浏览器兼容性
 
 - 使用现代浏览器API时要做兼容性检查
 - 提供优雅的降级方案
 
-### 5. Vue 响应式问题
+## 🔧 常见问题和解决方案
+
+### 1. Vue 响应式问题
 
 #### computed 属性更新问题
 
@@ -382,7 +396,61 @@ const updateData = async () => {
 </script>
 ```
 
-#### 异步数据处理最佳实践
+### 2. 数据流最佳实践
+
+#### 简化配置逻辑
+
+避免复杂的双重配置逻辑，优先使用简单的单一数据源：
+
+```typescript
+// ❌ 避免这样做
+const getFinalValue = () => {
+  if (option.primaryValue && option.primaryValue.trim()) {
+    return option.primaryValue.trim()
+  }
+  if (option.selectedId && streamList.value.length > 0) {
+    const selected = streamList.value.find(item => item.id === option.selectedId)
+    return selected?.value || ''
+  }
+  return ''
+}
+
+// ✅ 推荐这样做
+const getFinalValue = () => {
+  return option.dataset?.trim() || ''
+}
+
+// 在配置界面直接更新dataset
+const handleSelect = (value: string) => {
+  props.optionData.dataset = value
+}
+```
+
+#### 避免不必要的API调用
+
+在预览模式下，避免调用只在编辑模式下需要的API：
+
+```typescript
+// ❌ 避免在渲染组件中调用列表API
+onMounted(async () => {
+  await fetchOptionsList() // 预览时不需要
+  initComponent()
+})
+
+// ✅ 只在配置组件中调用
+// config.vue
+onMounted(() => {
+  fetchOptionsList()
+})
+
+// index.vue
+onMounted(() => {
+  // 直接使用保存的配置初始化
+  initComponent()
+})
+```
+
+### 3. 异步数据处理最佳实践
 
 ```typescript
 const loading = ref(false)
@@ -397,6 +465,7 @@ const fetchData = async () => {
     updateDependentData()
   } catch (error) {
     console.error('数据获取失败:', error)
+    handleError('数据获取失败')
   } finally {
     loading.value = false
   }
@@ -417,12 +486,16 @@ npm run dev  # 启动开发服务器
 // 在关键位置添加日志
 console.log('组件配置:', props.chartConfig)
 console.log('当前选项:', option)
+
+// 使用命名空间便于过滤
+console.log('[ComponentName] 数据更新:', newData)
 ```
 
 ### 3. Vue DevTools
 
 - 安装 Vue DevTools 浏览器扩展
 - 查看组件状态和props变化
+- 监控响应式数据的更新
 
 ### 4. 构建测试
 
@@ -452,4 +525,9 @@ npm run build  # 测试生产构建
 
 GoView 组件开发遵循清晰的目录结构和命名规范，通过标准化的4个文件实现组件的声明、渲染、配置和设置。关键是理解数据流、主题系统和组件生命周期，并遵循最佳实践进行开发。
 
-开发新组件时，建议先参考现有组件的实现，然后按照本指南的流程逐步开发和测试。 
+开发新组件时，建议：
+1. 先参考现有组件的实现
+2. 按照本指南的流程逐步开发
+3. 保持配置逻辑简单清晰
+4. 避免不必要的API调用
+5. 充分测试各种使用场景 
