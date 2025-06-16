@@ -1,4 +1,5 @@
 // components/AssetTabs.tsx
+import './AssetTabs.css';
 import React, { useState } from 'react';
 import { Tabs, Spin, Typography, Card, Image, Space, Select, Input, Empty, Pagination } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
@@ -7,6 +8,7 @@ import { MaterialDefinition } from '../hooks/useCesiumDragAndDrop';
 import { PublicModelMetadata } from '../services/publicModels';
 import { usePublicModelAssets } from '../hooks/usePublicModelAssets';
 import { ThreeDTilesTab } from './ThreeDTilesTab';
+import { AnimationTab } from './AnimationTab';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -298,6 +300,8 @@ interface AssetTabsProps {
   onMaterialDragStart: (e: React.DragEvent, materialId: string) => void;
   onPublicModelDragStart?: (e: React.DragEvent, modelId: string, generateMode: 'mouse' | 'origin') => void;
   onThreeDTilesDragStart?: (e: React.DragEvent, item: any) => void;
+  viewerRef?: React.RefObject<any>;
+  selectedModelId?: string | null;
 }
 
 export const AssetTabs: React.FC<AssetTabsProps> = ({
@@ -306,6 +310,8 @@ export const AssetTabs: React.FC<AssetTabsProps> = ({
   onModelDragStart,
   onPublicModelDragStart,
   onThreeDTilesDragStart,
+  viewerRef,
+  selectedModelId,
 }) => {
   // 公共模型过滤条件
   const [publicModelOptions, setPublicModelOptions] = useState({
@@ -409,6 +415,16 @@ export const AssetTabs: React.FC<AssetTabsProps> = ({
       ),
     },
     {
+      key: 'animation',
+      label: '动画',
+      children: (
+        <AnimationTab
+          viewerRef={viewerRef}
+          selectedModelId={selectedModelId}
+        />
+      ),
+    },
+    {
       key: 'materials',
       label: '材质',
       children: (
@@ -444,7 +460,7 @@ export const AssetTabs: React.FC<AssetTabsProps> = ({
       style={{
         height: '100%',
         width: '100%',
-        overflowY: 'auto',
+        overflow: 'hidden',
         padding: 0,
         display: 'flex',
         flexDirection: 'column',
@@ -453,11 +469,14 @@ export const AssetTabs: React.FC<AssetTabsProps> = ({
         body: { padding: 0, height: '100%', display: 'flex', flexDirection: 'column' }
       }}
     >
+      {/* 使用 rootClassName 配合外部样式，使 Tabs 标题栏 sticky，内容区滚动 */}
       <Tabs
         defaultActiveKey="models"
         activeKey={activeKey}
         onChange={setActiveKey}
-        style={{ flex: 1, padding: '0 16px' }}
+        rootClassName="asset-tabs"
+        style={{ flex: 1 }}
+        tabBarStyle={{ position: 'sticky', top: 0, zIndex: 1, background: '#fff', padding: '0 16px' }}
         items={items}
         tabBarExtraContent={tabBarExtraContent}
       />

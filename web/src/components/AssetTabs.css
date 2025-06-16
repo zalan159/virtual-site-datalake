@@ -1,0 +1,24 @@
+.asset-tabs {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* 让选项卡导航栏固定在容器顶部 */
+.asset-tabs .ant-tabs-nav {
+  /* 禁止导航栏随内容滚动 */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #fff;
+  /* 与内容左右间距保持一致 */
+  padding: 0 16px;
+  margin: 0; /* 消除默认 margin，避免位移 */
+}
+
+/* 内容区域占满剩余高度并在溢出时滚动 */
+.asset-tabs .ant-tabs-content-holder {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 16px; /* 保持与导航一致的左右内边距 */
+} 

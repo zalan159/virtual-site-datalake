@@ -413,6 +413,8 @@ const SceneEditorStandalone: React.FC = () => {
                 onMaterialDragStart={handleMaterialDragStart}
                 onPublicModelDragStart={handlePublicModelDragStart}
                 onThreeDTilesDragStart={handleThreeDTilesDragStart}
+                viewerRef={viewerRef}
+                selectedModelId={selectedInstanceId}
               />
             </div>
           </Splitter.Panel>
