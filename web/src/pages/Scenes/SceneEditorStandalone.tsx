@@ -19,6 +19,7 @@ import { SelectedModelPropertiesPanel } from '../../components/SelectedModelProp
 import { LayerDrawer, LayerInfo } from '../../components/LayerDrawer';
 import { MenuOutlined, EyeOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { getSceneDetail } from '../../services/sceneApi';
+import { wmtsAPI } from '../../services/wmtsApi';
 
 // 新组件
 import SceneSidebar from '../../components/scenes/SceneSidebar';
@@ -93,6 +94,98 @@ const SceneEditorStandalone: React.FC = () => {
     }
   }, [sceneId, viewerRef, origin, sceneInfo, loadSceneInstances]);
 
+  // WMTS图层加载函数
+  const loadWMTSLayer = useCallback(async (wmtsId: string) => {
+    try {
+      console.log('开始加载WMTS图层:', wmtsId);
+      
+      // 获取WMTS图层详情
+      const wmtsResponse = await wmtsAPI.getWMTSById(wmtsId);
+      const wmtsData = wmtsResponse.data;
+      
+      if (wmtsData && viewerRef.current) {
+        let imageryProvider;
+        
+        if (wmtsData.source_type === 'file' && wmtsData.tile_url_template) {
+          // 对于文件类型的WMTS (tpkx)
+          const minioUrl = import.meta.env.VITE_MINIO_URL || '';
+          const tileUrl = `${minioUrl}${wmtsData.tile_url_template}`;
+          
+          imageryProvider = new Cesium.UrlTemplateImageryProvider({
+            url: tileUrl,
+            minimumLevel: wmtsData.min_zoom || 0,
+            maximumLevel: wmtsData.max_zoom || 18,
+            rectangle: wmtsData.bounds ? Cesium.Rectangle.fromDegrees(
+              wmtsData.bounds.west,
+              wmtsData.bounds.south,
+              wmtsData.bounds.east,
+              wmtsData.bounds.north
+            ) : undefined
+          });
+        } else if (wmtsData.source_type === 'url' && wmtsData.service_url) {
+          // 对于URL类型的WMTS服务
+          let serviceUrl = wmtsData.service_url;
+          
+          // 如果是天地图服务，需要特殊处理
+          if (serviceUrl.includes('tianditu.gov.cn')) {
+            imageryProvider = new Cesium.WebMapTileServiceImageryProvider({
+              url: serviceUrl,
+              layer: wmtsData.layer_name || 'img', // 天地图默认使用img图层, 'vec' for vector
+              style: 'default',
+              format: wmtsData.format || 'image/png',
+              tileMatrixSetID: wmtsData.tile_matrix_set || 'c', // 天地图wgs84
+              maximumLevel: wmtsData.max_zoom || 18,
+              minimumLevel: wmtsData.min_zoom || 0,
+              subdomains: ['t0','t1','t2','t3','t4','t5','t6','t7'] //天地图负载均衡
+            });
+          } else {
+            // 其他WMTS服务
+            imageryProvider = new Cesium.WebMapTileServiceImageryProvider({
+              url: serviceUrl,
+              layer: wmtsData.layer_name || '',
+              style: 'default',
+              format: wmtsData.format || 'image/png',
+              tileMatrixSetID: wmtsData.tile_matrix_set || 'GoogleMapsCompatible',
+              maximumLevel: wmtsData.max_zoom || 18,
+              minimumLevel: wmtsData.min_zoom || 0
+            });
+          }
+        }
+        
+        if (imageryProvider) {
+          // 清除现有的WMTS图层
+          const imageryLayers = viewerRef.current.imageryLayers;
+          for (let i = imageryLayers.length - 1; i >= 0; i--) {
+            const layer = imageryLayers.get(i);
+            if ((layer as any).wmtsId) {
+              imageryLayers.remove(layer);
+            }
+          }
+          
+          // 添加新的WMTS图层
+          const imageryLayer = imageryLayers.addImageryProvider(imageryProvider);
+          (imageryLayer as any).wmtsId = wmtsId;
+          (imageryLayer as any).wmtsName = wmtsData.name;
+          
+          console.log(`已加载WMTS图层: ${wmtsData.name}`);
+        }
+      }
+    } catch (error) {
+      console.error('加载WMTS图层失败:', error);
+    }
+  }, []);
+
+  // WMTS图层加载
+  useEffect(() => {
+    if (sceneInfo?.data?.tiles_binding && viewerRef.current && !loadingInstances) {
+      const { wmts_id, enabled } = sceneInfo.data.tiles_binding;
+      
+      if (enabled && wmts_id) {
+        loadWMTSLayer(wmts_id);
+      }
+    }
+  }, [sceneInfo, viewerRef, loadingInstances, loadWMTSLayer]);
+
   // Model Assets Hook
   const { models, loadingModels } = useModelAssets();
 
@@ -104,6 +197,30 @@ const SceneEditorStandalone: React.FC = () => {
   // Selected Model State
   const [selectedModelInfo, setSelectedModelInfo] = useState<SelectedModelInfo | null>(null);
   
+  // 实时变换状态，用于在gizmo操作过程中更新侧边栏
+  const [realtimeTransform, setRealtimeTransform] = useState<{
+    instanceId: string;
+    transform: {
+      location: number[];
+      rotation: number[];
+      scale: number[];
+    };
+  } | null>(null);
+  
+  // 处理实时变换更新
+  const handleTransformUpdate = useCallback((instanceId: string, transform: {
+    location: number[];
+    rotation: number[];
+    scale: number[];
+  }) => {
+    setRealtimeTransform({ instanceId, transform });
+  }, []);
+
+  // 清理实时变换状态的函数
+  const clearRealtimeTransform = useCallback(() => {
+    setRealtimeTransform(null);
+  }, []);
+
   // Cesium Interactions Hook
   const { externalClearHighlight, clearGizmo } = useCesiumInteractions(
     viewerRef,
@@ -111,7 +228,9 @@ const SceneEditorStandalone: React.FC = () => {
     gizmoRef,
     setSelectedInstanceId,
     origin,
-    sceneId
+    sceneId,
+    handleTransformUpdate,
+    clearRealtimeTransform
   );
 
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -182,6 +301,12 @@ const SceneEditorStandalone: React.FC = () => {
   // 3DTiles拖拽
   const handleThreeDTilesDragStart = (e: React.DragEvent, item: any) => {
     e.dataTransfer.setData('threeDTilesId', item._id);
+  };
+
+  // 高斯泼溅拖拽
+  const handleGaussianSplatDragStart = (e: React.DragEvent, splat: any) => {
+    e.dataTransfer.setData('gaussianSplatId', splat.id);
+    e.dataTransfer.setData('gaussianSplatData', JSON.stringify(splat));
   };
 
   // 切换图层显示/隐藏
@@ -396,6 +521,7 @@ const SceneEditorStandalone: React.FC = () => {
               >
                 <SelectedModelPropertiesPanel
                   selectedModelInfo={selectedModelInfo}
+                  realtimeTransform={realtimeTransform}
                 />
               </Splitter.Panel>
             )}
@@ -413,6 +539,7 @@ const SceneEditorStandalone: React.FC = () => {
                 onMaterialDragStart={handleMaterialDragStart}
                 onPublicModelDragStart={handlePublicModelDragStart}
                 onThreeDTilesDragStart={handleThreeDTilesDragStart}
+                onGaussianSplatDragStart={handleGaussianSplatDragStart}
                 viewerRef={viewerRef}
                 selectedModelId={selectedInstanceId}
               />

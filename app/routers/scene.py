@@ -30,8 +30,10 @@ async def create_scene(
         scene.origin = {"longitude": 113, "latitude": 23, "height": 50}
     if data.chart_binds:
         scene.chart_binds = data.chart_binds
+    if data.tiles_binding:
+        scene.tiles_binding = data.tiles_binding
     scene.save()
-    return {"uid": scene.uid, "name": scene.name, "owner": scene.owner, "origin": scene.origin, "chart_binds": getattr(scene, 'chart_binds', [])}
+    return {"uid": scene.uid, "name": scene.name, "owner": scene.owner, "origin": scene.origin, "chart_binds": getattr(scene, 'chart_binds', []), "tiles_binding": getattr(scene, 'tiles_binding', {})}
 
 @router.get("/scenes", response_model=List[dict])
 async def list_scenes(current_user: UserInDB = Depends(get_current_active_user)):
@@ -41,7 +43,8 @@ async def list_scenes(current_user: UserInDB = Depends(get_current_active_user))
         "name": s.name,
         "created_at": s.created_at,
         "owner": getattr(s, 'owner', None),
-        "preview_image": getattr(s, 'preview_image', None)
+        "preview_image": getattr(s, 'preview_image', None),
+        "tiles_binding": getattr(s, 'tiles_binding', {})
     } for s in scenes]
 
 @router.get("/scenes/{scene_id}", response_model=dict)
@@ -96,6 +99,15 @@ async def get_scene(scene_id: str, current_user: UserInDB = Depends(get_current_
             "display_name": "图表绑定",
             "editable": True,
             "type": "array"
+        },
+        "tiles_binding": {
+            "display_name": "瓦片绑定",
+            "editable": True,
+            "type": "object",
+            "properties": {
+                "wmts_id": {"display_name": "WMTS服务ID", "type": "string"},
+                "enabled": {"display_name": "启用状态", "type": "boolean"}
+            }
         }
     }
     
@@ -108,7 +120,8 @@ async def get_scene(scene_id: str, current_user: UserInDB = Depends(get_current_
         "owner": getattr(scene, 'owner', None),
         "origin": getattr(scene, 'origin', None),
         "preview_image": getattr(scene, 'preview_image', None),
-        "chart_binds": getattr(scene, 'chart_binds', [])
+        "chart_binds": getattr(scene, 'chart_binds', []),
+        "tiles_binding": getattr(scene, 'tiles_binding', {})
     }
     
     # 返回带元数据的结果
@@ -131,7 +144,7 @@ async def update_scene(scene_id: str, data: SceneUpdate, current_user: UserInDB 
     scene.updated_at = datetime.utcnow()
     scene.save()
     # 返回所有可见字段
-    return {"uid": scene.uid, "name": scene.name, "updated_at": scene.updated_at, "origin": getattr(scene, 'origin', None), "owner": getattr(scene, 'owner', None), "chart_binds": getattr(scene, 'chart_binds', [])}
+    return {"uid": scene.uid, "name": scene.name, "updated_at": scene.updated_at, "origin": getattr(scene, 'origin', None), "owner": getattr(scene, 'owner', None), "chart_binds": getattr(scene, 'chart_binds', []), "tiles_binding": getattr(scene, 'tiles_binding', {})}
 
 @router.delete("/scenes/{scene_id}", response_model=dict)
 async def delete_scene(scene_id: str, current_user: UserInDB = Depends(get_current_active_user)):

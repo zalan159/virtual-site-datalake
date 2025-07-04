@@ -34,6 +34,7 @@ class Scene(StructuredNode):
     updated_at   = DateTimeProperty(default=lambda: datetime.utcnow())
     origin       = JSONProperty(default=lambda: {"longitude": 0.0, "latitude": 0.0, "height": 0.0})  # 新增，场景原点
     chart_binds  = JSONProperty(default=list)               # 新增, 绑定的图表ID列表
+    tiles_binding = JSONProperty(default=dict)              # 新增, 绑定的WMTS瓦片服务 {"wmts_id": "xxx", "enabled": true}
 
     # 根节点（单向；场景只有一个 ROOT）
     root         = RelationshipTo('Instance', 'ROOT', cardinality=One)
@@ -82,11 +83,13 @@ class SceneCreate(BaseModel):
     name: str
     origin: Optional[dict] = None  # 新增
     chart_binds: Optional[list] = None
+    tiles_binding: Optional[dict] = None  # 新增
 
 class SceneUpdate(BaseModel):
     name: Optional[str] = None
     origin: Optional[dict] = None  # 新增
     chart_binds: Optional[list] = None
+    tiles_binding: Optional[dict] = None  # 新增
     # 允许额外字段
     # Pydantic V2 使用 model_config
     model_config = {

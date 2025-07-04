@@ -12,6 +12,8 @@ from fastapi.staticfiles import StaticFiles
 from app.routers import auth, files, tasks, attachments, metadata, scene, public_models , streams
 from app.routers import iot  # 新增
 from app.routers import threedtiles  # 新增3DTiles路由
+from app.routers import wmts  # 新增WMTS路由
+from app.routers import gaussian_splat  # 新增高斯泼溅路由
 # from app.routers import charts  # 新增图表管理路由
 from app.routers import goview  # 新增GoView路由
 from app.models.user import UserRole
@@ -85,6 +87,8 @@ app.include_router(iot.router, prefix="/iot", tags=["iot"])  # 新增
 app.include_router(scene.router, prefix="", tags=["场景管理"])
 app.include_router(public_models.router, prefix="/public-models", tags=["公共模型"])  # 添加公共模型路由
 app.include_router(threedtiles.router, prefix="/3dtiles", tags=["3DTiles模型"])  # 添加3DTiles路由
+app.include_router(wmts.router, prefix="/wmts", tags=["WMTS瓦片服务"])  # 添加WMTS路由
+app.include_router(gaussian_splat.router, prefix="/api/gaussian-splats", tags=["高斯泼溅"])  # 添加高斯泼溅路由
 app.include_router(streams.router, prefix="/streams", tags=["视频流管理"])  # 新增视频流路由
 # app.include_router(charts.router, prefix="/charts", tags=["图表管理"])  # 新增图表管理路由
 app.include_router(goview.router, prefix="/goview", tags=["GoView"])  # 新增GoView路由

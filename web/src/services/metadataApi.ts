@@ -20,10 +20,47 @@ export interface ProductOccurrenceMetadata {
   user_data: Record<string, Array<Record<string, any>>>;
 }
 
+export interface MetadataTreeResponse {
+  nodes: Array<{
+    key: string;
+    title: string;
+    isLeaf: boolean;
+    hasChildren?: boolean;
+    children?: any[];
+    userData?: Record<string, any>;
+  }>;
+  total: number;
+  hasMore: boolean;
+  page?: number;
+  pageSize?: number;
+  parentKey?: string;
+}
+
 export const metadataApi = {
   // 获取指定文件的元数据
   getMetadataByFileId: (fileId: string): Promise<AxiosResponse<ProductOccurrenceMetadata[]>> => {
     return api.get(`/metadata/${fileId}`);
+  },
+
+  // 分层获取元数据树节点，支持懒加载
+  getMetadataTreeNodes: (
+    fileId: string, 
+    parentKey?: string,
+    page: number = 0,
+    pageSize: number = 100
+  ): Promise<AxiosResponse<MetadataTreeResponse>> => {
+    const params = new URLSearchParams();
+    if (parentKey) {
+      params.append('parent_key', parentKey);
+    }
+    params.append('page', page.toString());
+    params.append('page_size', pageSize.toString());
+    return api.get(`/metadata/${fileId}/tree?${params.toString()}`);
+  },
+
+  // 获取用户数据子节点
+  getUserDataNodes: (fileId: string, parentKey: string): Promise<AxiosResponse<MetadataTreeResponse>> => {
+    return api.get(`/metadata/${fileId}/user-data/${encodeURIComponent(parentKey)}`);
   },
 
   // 搜索元数据

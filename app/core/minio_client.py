@@ -21,6 +21,7 @@ ATTACHMENT_BUCKET_NAME = "attachments"  # 附件存储桶
 PREVIEW_BUCKET_NAME = "preview"
 PUBLIC_MODEL_BUCKET_NAME = "public-models"  # 公共模型存储桶
 THREEDTILES_BUCKET_NAME = "threedtiles"  # 3DTiles存储桶
+GAUSSIAN_SPLAT_BUCKET_NAME = "gaussian-splats"  # 高斯泼溅存储桶
 CHART_PREVIEWS_BUCKET_NAME = "chart-previews"  # 图表预览图存储桶
 GOVIEW_FILES_BUCKET_NAME = "goview-files"  # GoView文件存储桶
 
@@ -68,6 +69,13 @@ def check_and_create_bucket():
             print(f"MinIO bucket '{THREEDTILES_BUCKET_NAME}' 已创建")
         else:
             print(f"MinIO bucket '{THREEDTILES_BUCKET_NAME}' 已存在")
+
+        # 检查并创建高斯泼溅存储桶
+        if not minio_client.bucket_exists(GAUSSIAN_SPLAT_BUCKET_NAME):
+            minio_client.make_bucket(GAUSSIAN_SPLAT_BUCKET_NAME)
+            print(f"MinIO bucket '{GAUSSIAN_SPLAT_BUCKET_NAME}' 已创建")
+        else:
+            print(f"MinIO bucket '{GAUSSIAN_SPLAT_BUCKET_NAME}' 已存在")
 
         # 检查并创建图表预览图存储桶
         if not minio_client.bucket_exists(CHART_PREVIEWS_BUCKET_NAME):

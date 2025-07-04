@@ -150,6 +150,8 @@ export const useCesiumDragAndDrop = (
     const modelId = e.dataTransfer.getData('modelId');
     const publicModelId = e.dataTransfer.getData('publicModelId');
     const threeDTilesId = e.dataTransfer.getData('threeDTilesId');
+    const gaussianSplatId = e.dataTransfer.getData('gaussianSplatId');
+    const gaussianSplatData = e.dataTransfer.getData('gaussianSplatData');
     const generateMode = e.dataTransfer.getData('generateMode') as 'mouse' | 'origin';
 
     if (materialId) {
@@ -382,6 +384,75 @@ export const useCesiumDragAndDrop = (
       } catch (err) {
         console.error('处理3DTiles异常', err);
         messageApi.error('加载或实例化3DTiles失败');
+      }
+    } else if (gaussianSplatId && gaussianSplatData) {
+      // 处理高斯泼溅拖拽
+      try {
+        const splatData = JSON.parse(gaussianSplatData);
+        const splatName = splatData.filename;
+        const assetId = splatData.id;
+        
+        console.log('[GaussianSplat] 创建实例参数:', { splatName, assetId, lon, lat, height });
+        
+        // 创建实例到数据库
+        const result = await createInstanceInDB(
+          splatName,
+          assetId,
+          splatData.file_path,
+          { longitude: lon, latitude: lat, height },
+          'gaussianSplat'
+        );
+        
+        console.log('[GaussianSplat] createInstanceInDB结果:', result);
+        
+        if (!result) {
+          messageApi.error(`高斯泼溅 "${splatName}" 实例化失败`);
+          return;
+        }
+        
+        const { instanceId } = result;
+        
+        // 目前Cesium还没有原生的高斯泼溅支持，这里先添加一个占位符
+        // 可以使用一个简单的几何体或点云来表示高斯泼溅的位置
+        const worldPosition = Cartesian3.fromDegrees(lon, lat, height);
+        
+        // 创建一个简单的点云实体作为占位符
+        const entity = viewer.entities.add({
+          position: worldPosition,
+          point: {
+            pixelSize: 20,
+            color: Cesium.Color.LIGHTBLUE,
+            outlineColor: Cesium.Color.BLUE,
+            outlineWidth: 2,
+            heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+          },
+          label: {
+            text: splatName,
+            font: '12pt sans-serif',
+            pixelOffset: new Cesium.Cartesian2(0, -40),
+            fillColor: Cesium.Color.WHITE,
+            outlineColor: Cesium.Color.BLACK,
+            outlineWidth: 2,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          }
+        });
+        
+        // 添加元数据
+        (entity as any).id = instanceId;
+        (entity as any).name = splatName;
+        (entity as any).instanceId = instanceId;
+        (entity as any).assetType = 'gaussianSplat';
+        (entity as any).splatData = splatData;
+        
+        messageApi.success(`高斯泼溅 "${splatName}" 已加载并实例化（当前为占位符显示）`);
+        
+        // 拖放后刷新图层和实例树
+        if (refreshLayerStates) refreshLayerStates();
+        if (fetchInstanceTreeRef && fetchInstanceTreeRef.current) fetchInstanceTreeRef.current();
+        
+      } catch (err) {
+        console.error('处理高斯泼溅异常', err);
+        messageApi.error('加载或实例化高斯泼溅失败');
       }
     }
   }, [viewerRef, cesiumContainerRef, models, materials, messageApi, refreshLayerStates, publicModels, sceneId, sceneOrigin, fetchInstanceTreeRef]);

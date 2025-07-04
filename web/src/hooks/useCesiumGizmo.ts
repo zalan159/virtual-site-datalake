@@ -13,7 +13,14 @@ export interface UseCesiumGizmoProps {
   gizmoRef: React.MutableRefObject<any | null>;
   sceneOrigin?: { longitude: number; latitude: number; height: number };
   sceneId?: string;
-  // 可能还需要其他从 useCesiumInteractions 传递过来的参数或回调
+  // 新增：实时变换更新回调
+  onTransformUpdate?: (instanceId: string, transform: {
+    location: number[];
+    rotation: number[];
+    scale: number[];
+  }) => void;
+  // 新增：拖拽结束时的清理回调
+  onDragEnd?: () => void;
 }
 
 export const useCesiumGizmo = ({
@@ -21,6 +28,8 @@ export const useCesiumGizmo = ({
   gizmoRef,
   sceneOrigin,
   sceneId,
+  onTransformUpdate,
+  onDragEnd,
 }: UseCesiumGizmoProps) => {
   // Gizmo 相关的 state 和 refs 将会移动到这里
   const currentGizmoModeRef = useRef<string>(CesiumGizmo.Mode.TRANSLATE);
@@ -28,6 +37,13 @@ export const useCesiumGizmo = ({
   const lastPositionRef = useRef<Cesium.Cartesian3 | null>(null);
   const instanceTreeCacheRef = useRef<{ sceneId: string | undefined, tree: any | null }>({ sceneId: undefined, tree: null });
   const childInitialMatricesRef = useRef<Map<string, Cesium.Matrix4>>(new Map());
+  
+  // 当前实例的初始变换状态，用于计算实时变换
+  const initialTransformRef = useRef<{
+    location: number[];
+    rotation: number[];
+    scale: number[];
+  } | null>(null);
 
   const calculateLocalPosition = useCallback((position: Cesium.Cartesian3) => {
     if (!sceneOrigin) {
@@ -57,6 +73,77 @@ export const useCesiumGizmo = ({
     // 返回局部XYZ坐标作为数组（与useCesiumDragAndDrop保持一致）
     return [localCoordinates.x, localCoordinates.y, localCoordinates.z];
   }, [sceneOrigin]);
+
+  // 计算实时变换数据
+  const calculateRealtimeTransform = useCallback((gizmoData: any) => {
+    if (!initialTransformRef.current) return null;
+
+    const result = gizmoData.result;
+
+    let updatedTransform = {
+      location: [...initialTransformRef.current.location],
+      rotation: [...initialTransformRef.current.rotation],
+      scale: [...initialTransformRef.current.scale]
+    };
+
+    if (gizmoData.mode === CesiumGizmo.Mode.TRANSLATE) {
+      const position = new Cesium.Cartesian3(result.x || 0, result.y || 0, result.z || 0);
+      const localPosition = calculateLocalPosition(position);
+      updatedTransform.location = localPosition;
+    } 
+    else if (gizmoData.mode === CesiumGizmo.Mode.ROTATE) {
+      let rotationDegrees = [...initialTransformRef.current.rotation];
+      
+      // gizmo返回的是HeadingPitchRoll对象
+      if (result && typeof result === 'object') {
+        try {
+          if (result.heading !== undefined && result.pitch !== undefined && result.roll !== undefined) {
+            // 直接使用HeadingPitchRoll对象的值，这些已经是弧度值
+            const headingDeg = Cesium.Math.toDegrees(result.heading);
+            const pitchDeg = Cesium.Math.toDegrees(result.pitch);
+            const rollDeg = Cesium.Math.toDegrees(result.roll);
+            rotationDegrees = [headingDeg, pitchDeg, rollDeg];
+          } else if (result.x !== undefined && result.y !== undefined && result.z !== undefined) {
+            // 备用：如果返回的是xyz格式
+            const xDeg = Cesium.Math.toDegrees(result.x);
+            const yDeg = Cesium.Math.toDegrees(result.y);
+            const zDeg = Cesium.Math.toDegrees(result.z);
+            rotationDegrees = [xDeg, yDeg, zDeg];
+          }
+        } catch (e) {
+          console.error('旋转角度转换错误:', e, 'result:', result);
+        }
+      }
+      updatedTransform.rotation = rotationDegrees;
+    }
+    else if (gizmoData.mode === CesiumGizmo.Mode.SCALE || gizmoData.mode === CesiumGizmo.Mode.UNIFORM_SCALE) {
+      let scaleX, scaleY, scaleZ;
+      
+      // gizmo返回的是getScaleFromTransform的结果，即[scaleX, scaleY, scaleZ]数组
+      if (Array.isArray(result) && result.length >= 3) {
+        [scaleX, scaleY, scaleZ] = result;
+      } else if (result && typeof result === 'object') {
+        // 备用处理：如果返回的是对象格式
+        scaleX = result.scaleX ?? result.x ?? result[0];
+        scaleY = result.scaleY ?? result.y ?? result[1];
+        scaleZ = result.scaleZ ?? result.z ?? result[2];
+      } else {
+        // 如果无法解析，保持原值
+        scaleX = initialTransformRef.current.scale[0];
+        scaleY = initialTransformRef.current.scale[1];
+        scaleZ = initialTransformRef.current.scale[2];
+      }
+      
+      if (scaleX !== undefined && scaleY !== undefined && scaleZ !== undefined) {
+        scaleX = Math.max(0.01, scaleX);
+        scaleY = Math.max(0.01, scaleY);
+        scaleZ = Math.max(0.01, scaleZ);
+        updatedTransform.scale = [scaleX, scaleY, scaleZ];
+      }
+    }
+
+    return updatedTransform;
+  }, [calculateLocalPosition]);
 
   const findAllChildInstances = useCallback(async (instanceId: string): Promise<string[]> => {
     if (!sceneId) {
@@ -357,7 +444,8 @@ export const useCesiumGizmo = ({
     // 清除子节点列表
     childInstancesRef.current = [];
     lastPositionRef.current = null;
-    childInitialMatricesRef.current.clear(); 
+    childInitialMatricesRef.current.clear();
+    initialTransformRef.current = null; // 清除初始变换状态
   }, [gizmoRef]);
 
   const toggleGizmoMode = useCallback(async () => {
@@ -374,7 +462,39 @@ export const useCesiumGizmo = ({
     currentGizmoModeRef.current = modes[nextIndex];
     
     const selectedItem = gizmoRef.current.item;
+    const instanceId = selectedItem.id;
     clearGizmo(); // This will also clear childInitialMatricesRef
+
+    // 重新获取初始变换状态（因为模式切换可能需要最新的状态）
+    if (instanceId) {
+      try {
+        const response = await getInstanceProperties(instanceId);
+        let currentTransform = null;
+        
+        if (response?.data?.data?.instance?.transform) {
+          currentTransform = response.data.data.instance.transform;
+        } else if (response?.data?.instance?.transform) {
+          currentTransform = response.data.instance.transform;
+        } else if (response?.data?.data?.transform) {
+          currentTransform = response.data.data.transform;
+        } else if (response?.data?.transform) {
+          currentTransform = response.data.transform;
+        }
+        
+        initialTransformRef.current = {
+          location: currentTransform?.location || [0, 0, 0],
+          rotation: currentTransform?.rotation || [0, 0, 0],
+          scale: currentTransform?.scale || [1, 1, 1]
+        };
+      } catch (error) {
+        console.error('toggleGizmoMode: 获取初始变换状态失败:', error);
+        initialTransformRef.current = {
+          location: [0, 0, 0],
+          rotation: [0, 0, 0],
+          scale: [1, 1, 1]
+        };
+      }
+    }
     
     if (selectedItem) { // Check if selectedItem is still valid after clearGizmo
       let lastTransformResult: any = null;
@@ -440,6 +560,14 @@ export const useCesiumGizmo = ({
             if (viewerRef.current) viewerRef.current.scene.requestRender();
           }
           lastTransformResult = data; 
+          
+          // 新增：实时更新回调
+          if (onTransformUpdate && selectedItem.id) {
+            const realtimeTransform = calculateRealtimeTransform(data);
+            if (realtimeTransform) {
+              onTransformUpdate(selectedItem.id, realtimeTransform);
+            }
+          }
         },
         onDragEnd: async () => {
           const instanceId = selectedItem.id;
@@ -505,17 +633,51 @@ export const useCesiumGizmo = ({
           
           await updateModelTransform(instanceId, lastTransformResult);
           lastPositionRef.current = null;
+          
+          // 拖拽结束后的清理回调
+          if (onDragEnd) {
+            onDragEnd();
+          }
         }
       });
     }
-  }, [viewerRef, gizmoRef, clearGizmo, updateModelTransform, findAllChildInstances, updateChildModelsPosition, sceneId]);
+  }, [viewerRef, gizmoRef, clearGizmo, updateModelTransform, findAllChildInstances, updateChildModelsPosition, sceneId, onTransformUpdate, onDragEnd, calculateRealtimeTransform]);
 
   const setupGizmo = useCallback(async (selectedItem: Model) => {
     if (!viewerRef.current || !selectedItem || !selectedItem.id) return;
     const viewer = viewerRef.current;
     const instanceId = selectedItem.id;
 
-    clearGizmo(); 
+    clearGizmo();
+
+    // 获取当前实例的初始变换状态
+    try {
+      const response = await getInstanceProperties(instanceId);
+      let currentTransform = null;
+      
+      if (response?.data?.data?.instance?.transform) {
+        currentTransform = response.data.data.instance.transform;
+      } else if (response?.data?.instance?.transform) {
+        currentTransform = response.data.instance.transform;
+      } else if (response?.data?.data?.transform) {
+        currentTransform = response.data.data.transform;
+      } else if (response?.data?.transform) {
+        currentTransform = response.data.transform;
+      }
+      
+      initialTransformRef.current = {
+        location: currentTransform?.location || [0, 0, 0],
+        rotation: currentTransform?.rotation || [0, 0, 0],
+        scale: currentTransform?.scale || [1, 1, 1]
+      };
+    } catch (error) {
+      console.error('获取初始变换状态失败:', error);
+      initialTransformRef.current = {
+        location: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1]
+      };
+    } 
 
     try {
       let initialParentMatrix: Cesium.Matrix4 | null = null; 
@@ -585,6 +747,14 @@ export const useCesiumGizmo = ({
             viewer.scene.requestRender();
           }
           lastTransformResult = data; 
+          
+          // 新增：实时更新回调
+          if (onTransformUpdate && selectedItem.id) {
+            const realtimeTransform = calculateRealtimeTransform(data);
+            if (realtimeTransform) {
+              onTransformUpdate(selectedItem.id, realtimeTransform);
+            }
+          }
         },
         onDragEnd: async () => {
           if (!instanceId) {
@@ -651,6 +821,11 @@ export const useCesiumGizmo = ({
           setTimeout(async () => {
             await updateModelTransform(instanceId, lastTransformResult);
             lastPositionRef.current = null;
+            
+            // 拖拽结束后的清理回调
+            if (onDragEnd) {
+              onDragEnd();
+            }
           }, 100); 
         }
       });
@@ -658,7 +833,7 @@ export const useCesiumGizmo = ({
       console.error("Error setting up Gizmo:", error);
       clearGizmo(); 
     }
-  }, [viewerRef, gizmoRef, clearGizmo, findAllChildInstances, updateChildModelsPosition, updateModelTransform, sceneId, currentGizmoModeRef /* Added currentGizmoModeRef */]);
+  }, [viewerRef, gizmoRef, clearGizmo, findAllChildInstances, updateChildModelsPosition, updateModelTransform, sceneId, onTransformUpdate, onDragEnd, calculateRealtimeTransform]);
 
   return { 
     clearGizmo, 

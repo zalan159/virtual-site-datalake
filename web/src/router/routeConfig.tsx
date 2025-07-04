@@ -27,6 +27,8 @@ import VideoData from '../pages/Data/VideoData';
 import GISData from '../pages/Data/GISData';
 import ERPData from '../pages/Data/ERPData';
 import ChartData from '../pages/Data/ChartData';
+import TileData from '../pages/Data/TileData';
+import GaussianSplatManagement from '../pages/Data/GaussianSplatManagement';
 import UserSettings from '../pages/UserSettings';
 import SceneList from '../pages/Scenes/SceneList';
 // import SceneEditor from '../pages/Scenes/SceneEditor';
@@ -41,6 +43,8 @@ import ChartPreviewStandalone from '../pages/ChartPreviewStandalone';
 import PublicModels from '../pages/Admin/PublicModels';
 import UserPublicModels from '../pages/Models/PublicModels';
 import TilesetViewer from '../pages/TilesetViewer';
+import TilePreview from '../pages/TilePreview';
+import GaussianSplatPreview from '../pages/GaussianSplatPreview';
 
 // 定义路由配置项的类型
 export interface RouteItem {
@@ -163,6 +167,18 @@ export const routeConfig: RouteItem[] = [
         icon: <AppstoreOutlined />,
         component: ChartData,
       },
+      {
+        path: '/data/tiles',
+        name: '瓦片数据',
+        icon: <AppstoreOutlined />,
+        component: TileData,
+      },
+      // {
+      //   path: '/data/gaussian-splats',
+      //   name: '高斯泼溅',
+      //   icon: <AppstoreOutlined />,
+      //   component: GaussianSplatManagement,
+      // },
     ],
   },
   // {
@@ -224,6 +240,14 @@ export const specialRoutes = [
   {
     path: '/chart-preview/:chartId',
     component: ChartPreviewStandalone,
+  },
+  {
+    path: '/tile-preview',
+    component: TilePreview,
+  },
+  {
+    path: '/gaussian-splat-preview/:id',
+    component: GaussianSplatPreview,
   },
 ];
 

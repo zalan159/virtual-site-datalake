@@ -6,6 +6,7 @@ import { subscriptionAPI, UserTopicSubscription } from '../services/iotService';
 import { streamApi, Stream } from '../services/streamApi';
 import { attachmentApi, Attachment } from '../services/attachmentApi';
 import chartApi, { Chart } from '../services/chartApi';
+import { wmtsAPI, WMTSLayer } from '../services/wmtsApi';
 import { updateInstanceProperties } from '../services/sceneApi';
 import StringField from './fields/StringField';
 import TextField from './fields/TextField';
@@ -84,7 +85,7 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
   const [saving, setSaving] = useState(false);
   const { message } = AntdApp.useApp();
 
-  const [bindModalType, setBindModalType] = useState<'iot' | 'video' | 'file' | 'chart' | null>(null);
+  const [bindModalType, setBindModalType] = useState<'iot' | 'video' | 'file' | 'chart' | 'tiles' | null>(null);
   const [bindList, setBindList] = useState<any[]>([]);
   const [bindSelectedKeys, setBindSelectedKeys] = useState<string[]>([]);
 
@@ -130,7 +131,7 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
     return fakeUrl;
   };
 
-  const openBindModal = async (type: 'iot' | 'video' | 'file' | 'chart') => {
+  const openBindModal = async (type: 'iot' | 'video' | 'file' | 'chart' | 'tiles') => {
     try {
       let list: any[] = [];
       if (type === 'iot') {
@@ -149,6 +150,10 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
         const res = await chartApi.getChartList();
         list = res.charts || [];
         setBindSelectedKeys(formValues.chart_binds || []);
+      } else if (type === 'tiles') {
+        const res = await wmtsAPI.getWMTSList();
+        list = res.data || [];
+        setBindSelectedKeys(formValues.tiles_binding?.wmts_id ? [formValues.tiles_binding.wmts_id] : []);
       }
       setBindList(list);
       setBindModalType(type);
@@ -182,6 +187,18 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
       form.setFieldsValue({ [field]: bindSelectedKeys });
       message.info('图表选择已更新，请点击"保存"按钮来生效。');
       setBindModalType(null);
+    } else if (bindModalType === 'tiles') {
+      // 对于瓦片绑定，只更新表单状态，由用户手动保存
+      const field = 'tiles_binding';
+      const tilesBinding = bindSelectedKeys.length > 0 ? {
+        wmts_id: bindSelectedKeys[0], // 只选择一个瓦片图层
+        enabled: true
+      } : {};
+      handleFieldChange(field, tilesBinding);
+      // 更新 antd Form 的值，以便UI能正确响应
+      form.setFieldsValue({ [field]: tilesBinding });
+      message.info('瓦片选择已更新，请点击"保存"按钮来生效。');
+      setBindModalType(null);
     }
   };
 
@@ -209,6 +226,14 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
         { title: '图表名称', dataIndex: 'name' },
         { title: 'ID', dataIndex: 'uid' },
         { title: '状态', dataIndex: 'status' },
+      ];
+    }
+    if (bindModalType === 'tiles') {
+      return [
+        { title: '瓦片名称', dataIndex: 'name' },
+        { title: 'ID', dataIndex: 'id' },
+        { title: '数据源类型', dataIndex: 'source_type' },
+        { title: '瓦片格式', dataIndex: 'format' },
       ];
     }
     return [];
@@ -277,6 +302,9 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
         }
         if (fieldName === 'transform') {
           return <TransformField fieldName={fieldName} value={value} meta={meta} onChange={onChange} />;
+        }
+        if (fieldName === 'tiles_binding') {
+          return <BindingField fieldName={fieldName} value={value} meta={meta} onOpen={() => openBindModal('tiles')} />;
         }
         // 对于其他对象类型，使用JsonTreeField
         return <JsonTreeField fieldName={fieldName} value={value} meta={meta} onChange={onChange} groupId={groupId} />;
@@ -382,15 +410,23 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
   return (
     <Spin spinning={loading || saving}>
       {hasGroupsAndFields(metadata) && metadata.groups ? (
-        <Collapse defaultActiveKey={['0']} style={{ marginBottom: 16 }}>
-          {metadata.groups.map((g, i) => renderGroup(g, i))}
-        </Collapse>
+        <>
+          <Collapse defaultActiveKey={['0']} style={{ marginBottom: 16 }}>
+            {metadata.groups.map((g, i) => renderGroup(g, i))}
+          </Collapse>
+          {/* 分组模式下的保存按钮 */}
+          <div style={{ textAlign: 'right', marginTop: 16 }}>
+            <Button type="primary" onClick={handleSave} loading={saving} disabled={loading}>
+              保存
+            </Button>
+          </div>
+        </>
       ) : (
         renderUngrouped()
       )}
       <Modal title="选择绑定项" open={!!bindModalType} onOk={handleBindOk} onCancel={() => setBindModalType(null)} destroyOnClose>
         <Table
-          rowKey={bindModalType === 'chart' ? 'uid' : '_id'}
+          rowKey={bindModalType === 'chart' ? 'uid' : bindModalType === 'tiles' ? 'id' : '_id'}
           dataSource={bindList}
           columns={bindColumns()}
           rowSelection={{ selectedRowKeys: bindSelectedKeys, onChange: (keys) => setBindSelectedKeys(keys as string[]) }}

@@ -10,7 +10,7 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  background: #fff;
+  /* 背景色现在通过 tabBarStyle 中的 token.colorBgContainer 动态设置 */
   /* 与内容左右间距保持一致 */
   padding: 0 16px;
   margin: 0; /* 消除默认 margin，避免位移 */
@@ -21,4 +21,15 @@
   flex: 1;
   overflow-y: auto;
   padding: 0 16px; /* 保持与导航一致的左右内边距 */
+}
+
+/* 当显示动画标签页时，禁用外层滚动，让内层 AnimationTab 处理滚动 */
+.asset-tabs .ant-tabs-tabpane-active[data-node-key="animation"] {
+  height: 100%;
+  overflow: hidden; /* 禁用此层的滚动 */
+}
+
+/* 动画标签页的内容区不需要额外的 padding，因为 AnimationTab 内部会处理 */
+.asset-tabs .ant-tabs-tabpane-active[data-node-key="animation"] .ant-tabs-content-holder {
+  padding: 0;
 } 

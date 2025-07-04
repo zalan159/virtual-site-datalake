@@ -7,10 +7,19 @@ import { getInstanceProperties, updateInstanceProperties } from '../services/sce
 
 interface SelectedModelPropertiesPanelProps {
   selectedModelInfo: SelectedModelInfo | null;
+  realtimeTransform?: {
+    instanceId: string;
+    transform: {
+      location: number[];
+      rotation: number[];
+      scale: number[];
+    };
+  } | null;
 }
 
 export const SelectedModelPropertiesPanel: React.FC<SelectedModelPropertiesPanelProps> = ({
-  selectedModelInfo
+  selectedModelInfo,
+  realtimeTransform
 }) => {
   const [loading, setLoading] = useState(false);
   const [propertiesData, setPropertiesData] = useState<any>(null);
@@ -85,13 +94,35 @@ export const SelectedModelPropertiesPanel: React.FC<SelectedModelPropertiesPanel
     }
 
     if (propertiesData && metadata) {
+      // 合并实时变换数据
+      let mergedData = { ...propertiesData };
+      
+      // 如果有实时变换数据且匹配当前选中的模型
+      if (realtimeTransform && realtimeTransform.instanceId === selectedModelInfo.id) {
+        // 根据数据结构更新transform
+        if (mergedData.instance) {
+          mergedData = {
+            ...mergedData,
+            instance: {
+              ...mergedData.instance,
+              transform: realtimeTransform.transform
+            }
+          };
+        } else if (mergedData.transform) {
+          mergedData = {
+            ...mergedData,
+            transform: realtimeTransform.transform
+          };
+        }
+      }
+      
       // 打印metadata和propertiesData
       console.log("渲染表单前 metadata:", metadata);
-      console.log("渲染表单前 propertiesData:", propertiesData);
+      console.log("渲染表单前 propertiesData:", mergedData);
       return (
         <DynamicPropertyForm
           entityId={selectedModelInfo.id}
-          data={propertiesData}
+          data={mergedData}
           metadata={metadata}
           onSave={handleSave}
           onRefresh={() => loadModelProperties(selectedModelInfo.id)}

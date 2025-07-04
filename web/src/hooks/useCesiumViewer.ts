@@ -51,13 +51,16 @@ export const useCesiumViewer = (
         geocoder: false,
         navigationHelpButton: false,
         infoBox: false,
-        selectionIndicator: true,  
+        selectionIndicator: true,
         contextOptions: {
             webgl: {
               preserveDrawingBuffer: true
             }
           }
       });
+
+      // 移除默认影像图层
+      viewer.imageryLayers.removeAll();
 
       viewerRef.current = viewer;
     }
@@ -193,6 +196,75 @@ export const useCesiumViewer = (
             }
             continue;
           }
+          
+          // === 高斯泼溅类型处理 ===
+          if (instance.asset_type === 'gaussianSplat') {
+            try {
+              // 获取高斯泼溅数据
+              const resp = await api.get(`/api/gaussian-splats/${instance.asset_id}`);
+              const splatData = resp.data;
+              
+              if (!splatData) {
+                console.warn(`实例 "${instance.name}" (ID: ${instance.uid}) 获取高斯泼溅详情失败，跳过加载`);
+                failedLoads.push(instance.uid);
+                setLoadingProgress(prev => ({ ...prev, loaded: prev.loaded + 1 }));
+                continue;
+              }
+              
+              // 计算世界坐标位置
+              const originCartesian = Cesium.Cartesian3.fromDegrees(
+                origin.longitude,
+                origin.latitude,
+                origin.height
+              );
+              
+              // 使用局部坐标计算世界位置
+              const [localX, localY, localZ] = instance.transform.location;
+              const enuTransform = Cesium.Transforms.eastNorthUpToFixedFrame(originCartesian);
+              const localPosition = new Cesium.Cartesian3(localX, localY, localZ);
+              const worldPosition = new Cesium.Cartesian3();
+              Cesium.Matrix4.multiplyByPoint(enuTransform, localPosition, worldPosition);
+              
+              // 创建一个简单的点云实体作为占位符（等待Cesium原生支持）
+              const entity = viewerRef.current.entities.add({
+                position: worldPosition,
+                point: {
+                  pixelSize: 20,
+                  color: Cesium.Color.LIGHTBLUE,
+                  outlineColor: Cesium.Color.BLUE,
+                  outlineWidth: 2,
+                  heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+                },
+                label: {
+                  text: instance.name,
+                  font: '12pt sans-serif',
+                  pixelOffset: new Cesium.Cartesian2(0, -40),
+                  fillColor: Cesium.Color.WHITE,
+                  outlineColor: Cesium.Color.BLACK,
+                  outlineWidth: 2,
+                  style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                }
+              });
+              
+              // 添加元数据
+              (entity as any).id = instance.uid;
+              (entity as any).name = instance.name;
+              (entity as any).instanceId = instance.uid;
+              (entity as any).assetType = 'gaussianSplat';
+              (entity as any).splatData = splatData;
+              
+              successfulLoads.push(instance.uid);
+              setLoadingProgress(prev => ({ ...prev, loaded: prev.loaded + 1 }));
+              console.log(`已加载高斯泼溅 "${instance.name}" (ID: ${instance.uid}) - 使用占位符显示`);
+              
+            } catch (err) {
+              console.error(`加载高斯泼溅 "${instance.name}" 失败:`, err);
+              failedLoads.push(instance.uid);
+              setLoadingProgress(prev => ({ ...prev, loaded: prev.loaded + 1 }));
+            }
+            continue;
+          }
+          
           // === 其他类型保持原有逻辑 ===
           // 获取模型URI
           const modelUri = await getModelUri(instance);

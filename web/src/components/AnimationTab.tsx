@@ -1,4 +1,5 @@
 // components/AnimationTab.tsx
+import './AnimationTab.css';
 import React, { useState } from 'react';
 import { Card, Tabs, Empty } from 'antd';
 import { AnimationSequenceTab } from './animation/AnimationSequenceTab';
@@ -87,7 +88,7 @@ export const AnimationTab: React.FC<AnimationTabProps> = ({
       style={{
         height: '100%',
         width: '100%',
-        overflowY: 'auto',
+        overflow: 'hidden',
         padding: 0,
         display: 'flex',
         flexDirection: 'column',
@@ -99,7 +100,8 @@ export const AnimationTab: React.FC<AnimationTabProps> = ({
       <Tabs
         activeKey={activeKey}
         onChange={setActiveKey}
-        style={{ flex: 1, padding: '0 16px' }}
+        rootClassName="animation-tabs"
+        style={{ flex: 1 }}
         items={tabItems}
         tabPosition="left"
         size="small"

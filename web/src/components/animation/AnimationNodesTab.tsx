@@ -1,6 +1,6 @@
 // components/animation/AnimationNodesTab.tsx
 import React, { useState, useCallback } from 'react';
-import { Tree, Card, Typography, Space, Input, Empty, InputNumber, Row, Col, message } from 'antd';
+import { Tree, Card, Typography, Space, Input, Empty, InputNumber, Row, Col, message, theme } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import { SearchOutlined, NodeIndexOutlined } from '@ant-design/icons';
 import { AnimationManagerState, BoneNode } from '../../types/animation';
@@ -23,25 +23,15 @@ export const AnimationNodesTab: React.FC<AnimationNodesTabProps> = ({
   viewerRef,
   onNodeTransformUpdate,
 }) => {
+  const { token } = theme.useToken();
   const { boneNodes, isLoading } = animationState;
   const [selectedNodeKey, setSelectedNodeKey] = useState<string | null>(null);
   const [searchValue, setSearchValue] = useState('');
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
   const [autoExpandParent, setAutoExpandParent] = useState(true);
 
-  // 将BoneNode转换为DataNode
-  const convertToTreeData = (nodes: BoneNode[]): DataNode[] => {
-    return nodes.map(node => ({
-      key: node.id,
-      title: renderNodeTitle(node),
-      children: node.children ? convertToTreeData(node.children) : undefined,
-      isLeaf: !node.children || node.children.length === 0,
-      data: node,
-    }));
-  };
-
   // 渲染节点标题
-  const renderNodeTitle = (node: BoneNode) => {
+  const renderNodeTitle = useCallback((node: BoneNode) => {
     const index = searchValue ? node.name.indexOf(searchValue) : -1;
     const beforeStr = node.name.substring(0, index);
     const afterStr = node.name.substring(index + searchValue.length);
@@ -49,7 +39,7 @@ export const AnimationNodesTab: React.FC<AnimationNodesTabProps> = ({
     const title = index > -1 ? (
       <span>
         {beforeStr}
-        <span style={{ backgroundColor: '#ffeb3b' }}>{searchValue}</span>
+        <span style={{ backgroundColor: token.colorWarning, color: token.colorTextBase }}>{searchValue}</span>
         {afterStr}
       </span>
     ) : (
@@ -58,11 +48,22 @@ export const AnimationNodesTab: React.FC<AnimationNodesTabProps> = ({
 
     return (
       <Space>
-        <NodeIndexOutlined style={{ color: '#1890ff' }} />
+        <NodeIndexOutlined style={{ color: token.colorPrimary }} />
         {title}
       </Space>
     );
-  };
+  }, [searchValue, token]);
+
+  // 将BoneNode转换为DataNode
+  const convertToTreeData = useCallback((nodes: BoneNode[]): DataNode[] => {
+    return nodes.map(node => ({
+      key: node.id,
+      title: renderNodeTitle(node),
+      children: node.children ? convertToTreeData(node.children) : undefined,
+      isLeaf: !node.children || node.children.length === 0,
+      data: node,
+    }));
+  }, [renderNodeTitle]);
 
   // 获取所有节点的key
   const getAllKeys = (nodes: BoneNode[]): React.Key[] => {
@@ -229,7 +230,7 @@ export const AnimationNodesTab: React.FC<AnimationNodesTabProps> = ({
                 onExpand={handleExpand}
                 treeData={treeData}
                 height={400}
-                style={{ backgroundColor: '#fafafa' }}
+                style={{ backgroundColor: token.colorBgLayout }}
               />
             </Card>
           </Col>
@@ -315,7 +316,7 @@ export const AnimationNodesTab: React.FC<AnimationNodesTabProps> = ({
                     </div>
 
                     {/* 编辑提示 */}
-                    <div style={{ fontSize: 12, color: '#666', marginTop: 8 }}>
+                    <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 8 }}>
                       💡 提示：修改数值会实时应用到3D模型中
                     </div>
                   </Space>

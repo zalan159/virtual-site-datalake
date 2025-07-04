@@ -14,7 +14,8 @@ import {
   InputNumber,
   Table,
   Popconfirm,
-  Alert
+  Alert,
+  theme
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { PlusOutlined, DeleteOutlined, SettingOutlined } from '@ant-design/icons';
@@ -44,6 +45,8 @@ export const AnimationSettingsTab: React.FC<AnimationSettingsTabProps> = ({
   const [form] = Form.useForm();
   const [iotBindingForm] = Form.useForm();
   const [showAddBinding, setShowAddBinding] = useState(false);
+  
+  const { token } = theme.useToken();
 
   // 处理触发类型改变
   const handleTriggerTypeChange = (triggerType: AnimationTriggerType) => {
@@ -421,15 +424,21 @@ export const AnimationSettingsTab: React.FC<AnimationSettingsTabProps> = ({
         {/* 事件触发说明 */}
         <Card size="small" title="动画事件格式说明">
           <Typography>
-            <Text>动画系统支持以下JSON格式的事件触发：</Text>
-            <pre style={{ 
-              backgroundColor: '#f5f5f5', 
-              padding: 12, 
-              borderRadius: 4, 
-              marginTop: 8,
-              fontSize: 12,
-              overflow: 'auto'
-            }}>
+            <Typography.Paragraph>
+              <Text>动画系统支持以下JSON格式的事件触发：</Text>
+            </Typography.Paragraph>
+            <Typography.Paragraph>
+              <pre style={{ 
+                backgroundColor: token.colorFillAlter, 
+                border: `1px solid ${token.colorBorder}`,
+                padding: token.paddingSM, 
+                borderRadius: token.borderRadius, 
+                marginTop: token.marginXS,
+                fontSize: token.fontSizeSM,
+                overflow: 'auto',
+                color: token.colorText,
+                fontFamily: token.fontFamilyCode || 'monospace'
+              }}>
 {`{
   "type": "play" | "pause" | "stop" | "seek" | "node_transform",
   "modelId": "场景中GLB对象的ID",
@@ -449,7 +458,8 @@ export const AnimationSettingsTab: React.FC<AnimationSettingsTabProps> = ({
   },
   "timestamp": 时间戳
 }`}
-            </pre>
+              </pre>
+            </Typography.Paragraph>
           </Typography>
         </Card>
 

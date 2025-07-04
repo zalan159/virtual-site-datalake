@@ -52,6 +52,7 @@ class ConversionStep(str, Enum):
 class TaskType(str, Enum):
     FILE_CONVERSION = "file_conversion"  # 文件转换
     THREEDTILES_PROCESSING = "threedtiles_processing"  # 3DTiles处理
+    WMTS_PROCESSING = "wmts_processing"  # WMTS瓦片处理
 
 # 任务过期时间（秒）
 TASK_EXPIRE_TIME = 7 * 24 * 60 * 60  # 7天
@@ -434,6 +435,11 @@ class TaskManager:
                         asyncio.create_task(
                             self._process_threedtiles_task(task)
                         )
+                    elif task.task_type == TaskType.WMTS_PROCESSING:
+                        print(f"[INFO] 创建WMTS处理任务协程，任务ID: {task.task_id}")
+                        asyncio.create_task(
+                            self._process_wmts_task(task)
+                        )
                     else:
                         print(f"未知任务类型: {task.task_type}")
                     
@@ -623,6 +629,95 @@ class TaskManager:
             import traceback
             error_detail = f"{str(e)}\n{traceback.format_exc()}"
             print(f"[ERROR] 处理3DTiles任务失败: {error_detail}")
+            
+            await self.update_task(
+                task.task_id,
+                status=TaskStatus.FAILED,
+                error_message=str(e)
+            )
+    
+    async def _process_wmts_task(self, task: Task):
+        """处理WMTS瓦片任务"""
+        try:
+            # 打印原始任务信息
+            print(f"[DEBUG] 任务管理器开始处理WMTS任务，任务ID: {task.task_id}")
+            print(f"[DEBUG] 任务信息: 类型={task.task_type}, 状态={task.status}, 进度={task.progress}")
+            print(f"[DEBUG] 任务结果数据: {task.result}")
+            
+            # 更新任务状态为处理中
+            await self.update_task(
+                task.task_id,
+                status=TaskStatus.PROCESSING,
+                current_step=ConversionStep.DOWNLOADING,
+                progress=10
+            )
+            
+            # 更新进度
+            await self.update_task(
+                task.task_id,
+                progress=30,
+                current_step=ConversionStep.CONVERTING
+            )
+            
+            # 检查任务是否包含必要的数据
+            if not task.result.get("object_id") or not task.result.get("filename"):
+                error_msg = "任务缺少必要数据: object_id 或 filename"
+                print(f"[ERROR] {error_msg}")
+                await self.update_task(
+                    task.task_id, 
+                    status=TaskStatus.FAILED,
+                    error_message=error_msg
+                )
+                return
+                
+            # 检查WMTS特定的数据
+            if task.result.get("wmts_data") is None:
+                error_msg = "任务缺少必要数据: wmts_data"
+                print(f"[ERROR] {error_msg}")
+                await self.update_task(
+                    task.task_id, 
+                    status=TaskStatus.FAILED,
+                    error_message=error_msg
+                )
+                return
+            
+            # 使用WMTS处理器处理任务
+            from app.tasks.wmts_processor import WMTSProcessor
+            print(f"[DEBUG] 调用WMTSProcessor.process_wmts处理任务")
+            success, error_message, result = await WMTSProcessor.process_wmts(task, self.db)
+            
+            if success:
+                # 更新任务状态为完成
+                print(f"[DEBUG] 任务处理成功，result: {result}")
+                
+                # 确保结果数据中包含原始任务数据和新的处理结果
+                updated_result = task.result.copy() if task.result else {}
+                if result:
+                    updated_result.update(result)
+                    # 确保重要的ID存在于任务结果中
+                    if "wmts_id" in result:
+                        print(f"[DEBUG] 任务结果包含wmts_id: {result['wmts_id']}")
+                
+                await self.update_task(
+                    task.task_id,
+                    status=TaskStatus.COMPLETED,
+                    progress=100,
+                    current_step=ConversionStep.COMPLETED,
+                    result=updated_result
+                )
+            else:
+                # 更新任务状态为失败
+                print(f"[ERROR] 任务处理失败，错误信息: {error_message}")
+                await self.update_task(
+                    task.task_id,
+                    status=TaskStatus.FAILED,
+                    error_message=error_message
+                )
+        except Exception as e:
+            # 更新任务状态为失败
+            import traceback
+            error_detail = f"{str(e)}\n{traceback.format_exc()}"
+            print(f"[ERROR] 处理WMTS任务失败: {error_detail}")
             
             await self.update_task(
                 task.task_id,

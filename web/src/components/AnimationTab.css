@@ -1,0 +1,28 @@
+/* AnimationTab 特殊样式 - 左右布局 */
+.animation-tabs {
+  display: flex;
+  height: 100%;
+}
+
+/* 左侧标签栏固定，不滚动 */
+.animation-tabs .ant-tabs-nav {
+  flex-shrink: 0; /* 防止压缩 */
+  min-width: 120px; /* 确保最小宽度 */
+  padding: 16px 0 16px 16px; /* 上下内边距，左边距 */
+  margin: 0;
+  overflow: visible; /* 避免标签被裁剪 */
+}
+
+/* 右侧内容区域占满剩余宽度并在溢出时滚动 */
+.animation-tabs .ant-tabs-content-holder {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px; /* 内容区四周内边距 */
+  min-width: 0; /* 防止 flex 子项不收缩 */
+}
+
+/* 确保内容区的具体内容也能正确滚动 */
+.animation-tabs .ant-tabs-tabpane {
+  height: 100%;
+  overflow-y: auto;
+} 

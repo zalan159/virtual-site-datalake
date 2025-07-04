@@ -1,7 +1,7 @@
 // components/AssetTabs.tsx
 import './AssetTabs.css';
 import React, { useState } from 'react';
-import { Tabs, Spin, Typography, Card, Image, Space, Select, Input, Empty, Pagination } from 'antd';
+import { Tabs, Spin, Typography, Card, Image, Space, Select, Input, Empty, Pagination, theme } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { ModelAsset } from '../hooks/useModelAssets';
 import { MaterialDefinition } from '../hooks/useCesiumDragAndDrop';
@@ -9,6 +9,7 @@ import { PublicModelMetadata } from '../services/publicModels';
 import { usePublicModelAssets } from '../hooks/usePublicModelAssets';
 import { ThreeDTilesTab } from './ThreeDTilesTab';
 import { AnimationTab } from './AnimationTab';
+import { GaussianSplatTab } from './GaussianSplatTab';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -300,8 +301,9 @@ interface AssetTabsProps {
   onMaterialDragStart: (e: React.DragEvent, materialId: string) => void;
   onPublicModelDragStart?: (e: React.DragEvent, modelId: string, generateMode: 'mouse' | 'origin') => void;
   onThreeDTilesDragStart?: (e: React.DragEvent, item: any) => void;
-  viewerRef?: React.RefObject<any>;
-  selectedModelId?: string | null;
+  onGaussianSplatDragStart?: (e: React.DragEvent, splat: any) => void;
+  viewerRef: React.RefObject<any>;
+  selectedModelId: string | null;
 }
 
 export const AssetTabs: React.FC<AssetTabsProps> = ({
@@ -310,9 +312,11 @@ export const AssetTabs: React.FC<AssetTabsProps> = ({
   onModelDragStart,
   onPublicModelDragStart,
   onThreeDTilesDragStart,
+  onGaussianSplatDragStart,
   viewerRef,
   selectedModelId,
 }) => {
+  const { token } = theme.useToken();
   // 公共模型过滤条件
   const [publicModelOptions, setPublicModelOptions] = useState({
     page: 1,
@@ -415,6 +419,13 @@ export const AssetTabs: React.FC<AssetTabsProps> = ({
       ),
     },
     {
+      key: 'gaussianSplats',
+      label: '高斯泼溅',
+      children: (
+        <GaussianSplatTab onGaussianSplatDragStart={onGaussianSplatDragStart} />
+      ),
+    },
+    {
       key: 'animation',
       label: '动画',
       children: (
@@ -476,7 +487,7 @@ export const AssetTabs: React.FC<AssetTabsProps> = ({
         onChange={setActiveKey}
         rootClassName="asset-tabs"
         style={{ flex: 1 }}
-        tabBarStyle={{ position: 'sticky', top: 0, zIndex: 1, background: '#fff', padding: '0 16px' }}
+        tabBarStyle={{ position: 'sticky', top: 0, zIndex: 1, background: token.colorBgContainer, padding: '0 16px' }}
         items={items}
         tabBarExtraContent={tabBarExtraContent}
       />

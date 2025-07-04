@@ -19,7 +19,13 @@ export const useCesiumInteractions = (
   gizmoRef: React.MutableRefObject<any | null>,
   onInstanceTreeSelect?: (instanceId: string | null) => void,
   sceneOrigin?: { longitude: number, latitude: number, height: number },
-  sceneId?: string
+  sceneId?: string,
+  onTransformUpdate?: (instanceId: string, transform: {
+    location: number[];
+    rotation: number[];
+    scale: number[];
+  }) => void,
+  onGizmoDragEnd?: () => void
 ) => {
   const lastHighlightedRef = useRef<any>(null);
   const lastColorRef = useRef<Color | undefined>(undefined);
@@ -34,6 +40,8 @@ export const useCesiumInteractions = (
     gizmoRef,
     sceneOrigin,
     sceneId,
+    onTransformUpdate,
+    onDragEnd: onGizmoDragEnd,
   });
 
   const clearHighlight = useCallback(() => {
