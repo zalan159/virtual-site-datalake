@@ -9,7 +9,7 @@ import { PublicModelMetadata } from '../services/publicModels';
 import { usePublicModelAssets } from '../hooks/usePublicModelAssets';
 import { ThreeDTilesTab } from './ThreeDTilesTab';
 import { AnimationTab } from './AnimationTab';
-import { GaussianSplatTab } from './GaussianSplatTab';
+// import { GaussianSplatTab } from './GaussianSplatTab';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -418,13 +418,13 @@ export const AssetTabs: React.FC<AssetTabsProps> = ({
         <ThreeDTilesTab onThreeDTilesDragStart={onThreeDTilesDragStart} />
       ),
     },
-    {
-      key: 'gaussianSplats',
-      label: '高斯泼溅',
-      children: (
-        <GaussianSplatTab onGaussianSplatDragStart={onGaussianSplatDragStart} />
-      ),
-    },
+    // {
+    //   key: 'gaussianSplats',
+    //   label: '高斯泼溅',
+    //   children: (
+    //     <GaussianSplatTab onGaussianSplatDragStart={onGaussianSplatDragStart} />
+    //   ),
+    // },
     {
       key: 'animation',
       label: '动画',

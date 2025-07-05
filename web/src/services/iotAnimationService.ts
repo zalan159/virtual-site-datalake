@@ -220,29 +220,11 @@ export class IoTAnimationService {
 
   /**
    * 设置WebSocket IoT监听器
+   * WebSocket连接逻辑已移至usePreviewMode hook中，仅在预览模式下才会建立连接
    */
   private setupWebSocketIoTListener(): void {
-    try {
-      const wsUrl = `ws://${window.location.hostname}:8000/ws/iot-data`;
-      const ws = new WebSocket(wsUrl);
-      
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'iot-update') {
-            this.updateIoTDataBatch(data.data);
-          }
-        } catch (error) {
-          console.error('WebSocket IoT数据解析失败:', error);
-        }
-      };
-
-      ws.onerror = (error) => {
-        console.warn('IoT数据WebSocket连接失败:', error);
-      };
-    } catch (error) {
-      console.warn('无法建立IoT数据WebSocket连接:', error);
-    }
+    // WebSocket连接逻辑已移至usePreviewMode hook中
+    // 这里保留空实现，避免破坏现有的事件监听架构
   }
 
   /**
@@ -266,6 +248,16 @@ export class IoTAnimationService {
       const rpm = 1000 + Math.random() * 2000; // 1000-3000 RPM
       this.updateIoTData('mqtt.motor.rpm', rpm);
     }, 1500);
+  }
+
+  /**
+   * 初始化服务（用于预览模式）
+   * @param viewerRef 3D查看器引用
+   */
+  public initialize(viewerRef: any): void {
+    // 这里可以存储viewer引用以便后续使用
+    // 当前实现中暂时不需要特殊的初始化逻辑
+    console.log('IoT动画服务已初始化');
   }
 
   /**

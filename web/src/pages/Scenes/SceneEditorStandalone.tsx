@@ -12,6 +12,7 @@ import { useModelAssets } from '../../hooks/useModelAssets';
 import { useCesiumInteractions, SelectedModelInfo } from '../../hooks/useCesiumInteractions';
 import { useCesiumDragAndDrop } from '../../hooks/useCesiumDragAndDrop';
 import { usePublicModelAssets } from '../../hooks/usePublicModelAssets';
+import { usePreviewMode } from '../../hooks/usePreviewMode';
 
 // Components
 import { AssetTabs } from '../../components/AssetTabs.js';
@@ -346,6 +347,23 @@ const SceneEditorStandalone: React.FC = () => {
       window.removeEventListener('message', handleMessage);
     };
   }, []);
+
+  // 预览模式WebSocket连接管理
+  const { 
+    isAnimationConnected, 
+    isIoTConnected, 
+    connectionError,
+    reconnect
+  } = usePreviewMode({
+    enabled: isPreviewMode,
+    viewerRef,
+    onAnimationEvent: (event) => {
+      console.log('接收到动画事件:', event);
+    },
+    onIoTDataUpdate: (data) => {
+      console.log('接收到IoT数据更新:', data);
+    }
+  });
 
   // 预览模式切换
   const handlePreviewToggle = () => {

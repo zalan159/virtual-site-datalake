@@ -28,6 +28,7 @@ import GISData from '../pages/Data/GISData';
 import ERPData from '../pages/Data/ERPData';
 import ChartData from '../pages/Data/ChartData';
 import TileData from '../pages/Data/TileData';
+import WebSocketData from '../pages/Data/WebSocketData';
 import GaussianSplatManagement from '../pages/Data/GaussianSplatManagement';
 import UserSettings from '../pages/UserSettings';
 import SceneList from '../pages/Scenes/SceneList';
@@ -172,6 +173,12 @@ export const routeConfig: RouteItem[] = [
         name: '瓦片数据',
         icon: <AppstoreOutlined />,
         component: TileData,
+      },
+      {
+        path: '/data/websockets',
+        name: 'WebSocket数据源',
+        icon: <ApiOutlined />,
+        component: WebSocketData,
       },
       // {
       //   path: '/data/gaussian-splats',

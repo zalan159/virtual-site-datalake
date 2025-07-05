@@ -1,0 +1,16 @@
+{
+  "name": "websocket-test-server",
+  "version": "1.0.0",
+  "description": "WebSocket测试服务器 - 用于VirtualSite项目测试",
+  "main": "websocket_test_server.js",
+  "scripts": {
+    "start": "node websocket_test_server.js",
+    "dev": "node websocket_test_server.js"
+  },
+  "dependencies": {
+    "ws": "^8.14.2"
+  },
+  "keywords": ["websocket", "test", "server", "echo"],
+  "author": "VirtualSite",
+  "license": "MIT"
+} 
