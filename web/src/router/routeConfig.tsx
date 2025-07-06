@@ -21,8 +21,8 @@ import TaskList from '../pages/Models/TaskList';
 import ModelPreviewStandalone from '../pages/Models/ModelPreviewStandalone';
 import MetadataManagement from '../pages/Data/MetadataManagement';
 import AttachmentManagement from '../pages/Data/AttachmentManagement';
-import IoTData from '../pages/Data/IoTData';
-import UserSubscriptions from '../pages/Data/Subscriptions';
+import MQTTData from '../pages/Data/MQTTData';
+import HTTPData from '../pages/Data/HTTPData';
 import VideoData from '../pages/Data/VideoData';
 import GISData from '../pages/Data/GISData';
 import ERPData from '../pages/Data/ERPData';
@@ -127,16 +127,16 @@ export const routeConfig: RouteItem[] = [
         component: DataTemplate,
       },
       {
-        path: '/data/iot',
-        name: 'IoT数据源',
-        icon: <AppstoreOutlined />,
-        component: IoTData,
+        path: '/data/mqtt',
+        name: 'MQTT连接配置',
+        icon: <ApiOutlined />,
+        component: MQTTData,
       },
       {
-        path: '/data/mqtt-subscriptions',
-        name: 'IoT数据订阅',
-        icon: <ApiOutlined />,
-        component: UserSubscriptions,
+        path: '/data/http',
+        name: 'HTTP连接配置',
+        icon: <AppstoreOutlined />,
+        component: HTTPData,
       },
       {
         path: '/data/video',

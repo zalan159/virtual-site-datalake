@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { Form, Spin, Collapse, Modal, Table, Button, App as AntdApp } from 'antd';
 import type { UploadFile } from 'antd/es/upload/interface';
 import type { ColumnsType } from 'antd/es/table';
-import { subscriptionAPI, UserTopicSubscription } from '../services/iotService';
 import { streamApi, Stream } from '../services/streamApi';
 import { attachmentApi, Attachment } from '../services/attachmentApi';
 import chartApi, { Chart } from '../services/chartApi';
 import { wmtsAPI, WMTSLayer } from '../services/wmtsApi';
 import { updateInstanceProperties } from '../services/sceneApi';
+import { iotBindingAPI, IoTBinding } from '../services/iotBindingApi';
 import StringField from './fields/StringField';
 import TextField from './fields/TextField';
 import NumberField from './fields/NumberField';
@@ -20,6 +20,7 @@ import GenericObjectField from './fields/GenericObjectField';
 import ArrayField from './fields/ArrayField';
 import BindingField from './fields/BindingField';
 import JsonTreeField from './fields/JsonTreeField';
+import IoTBindingModal from './IoTBindingModal';
 
 const { Panel } = Collapse;
 
@@ -88,6 +89,11 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
   const [bindModalType, setBindModalType] = useState<'iot' | 'video' | 'file' | 'chart' | 'tiles' | null>(null);
   const [bindList, setBindList] = useState<any[]>([]);
   const [bindSelectedKeys, setBindSelectedKeys] = useState<string[]>([]);
+  
+  // IoT绑定相关状态
+  const [iotBindingModalVisible, setIotBindingModalVisible] = useState(false);
+  const [iotBindings, setIotBindings] = useState<IoTBinding[]>([]);
+  const [sceneId, setSceneId] = useState<string>('');
 
   useEffect(() => {
     const newFormValues = data || {};
@@ -131,13 +137,60 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
     return fakeUrl;
   };
 
+  // IoT绑定处理函数
+  const handleIotBindingSave = async (bindings: IoTBinding[]) => {
+    try {
+      console.log('📋 IoT绑定保存回调，更新属性面板');
+      console.log('🔗 绑定数据:', bindings);
+      
+      setIotBindings(bindings);
+      // 更新表单中的iot_binds字段
+      const bindingIds = bindings.map(b => b.id);
+      handleFieldChange('iot_binds', bindingIds);
+      setIotBindingModalVisible(false);
+      
+      // 触发属性面板数据刷新，这样绑定状态就能正确显示
+      if (onRefresh) {
+        console.log('🔄 触发属性面板刷新');
+        onRefresh();
+      }
+      
+      message.success('IoT绑定配置已保存，属性面板已刷新');
+    } catch (error) {
+      console.error('保存IoT绑定失败:', error);
+      message.error('保存IoT绑定失败');
+    }
+  };
+
+  const handleIotBindingClose = () => {
+    setIotBindingModalVisible(false);
+  };
+
   const openBindModal = async (type: 'iot' | 'video' | 'file' | 'chart' | 'tiles') => {
     try {
       let list: any[] = [];
       if (type === 'iot') {
-        const res = await subscriptionAPI.list();
-        list = res.data || [];
-        setBindSelectedKeys(formValues.iot_binds || []);
+        // 获取场景ID（支持多种路径格式）
+        const pathParts = window.location.pathname.split('/');
+        let sceneIdFromPath = null;
+        
+        // 支持 /scenes/{id} 和 /scene-editor/{id} 两种路径格式
+        const sceneIndex = pathParts.findIndex(part => part === 'scenes' || part === 'scene-editor');
+        if (sceneIndex !== -1 && pathParts[sceneIndex + 1]) {
+          sceneIdFromPath = pathParts[sceneIndex + 1];
+        }
+        
+        if (!sceneIdFromPath) {
+          message.error('无法获取场景ID，当前路径：' + window.location.pathname);
+          console.error('路径解析失败，路径片段：', pathParts);
+          return;
+        }
+        
+        setSceneId(sceneIdFromPath);
+        
+        // 直接打开IoT绑定管理界面，由IoTBindingModal自己处理绑定加载
+        setIotBindingModalVisible(true);
+        return;
       } else if (type === 'video') {
         const data = await streamApi.getList();
         list = data || [];
@@ -433,6 +486,16 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
           pagination={false}
         />
       </Modal>
+      
+      {/* IoT绑定配置模态框 */}
+      <IoTBindingModal
+        visible={iotBindingModalVisible}
+        instanceId={entityId}
+        sceneId={sceneId}
+        bindings={iotBindings}
+        onClose={handleIotBindingClose}
+        onSave={handleIotBindingSave}
+      />
     </Spin>
   );
 };

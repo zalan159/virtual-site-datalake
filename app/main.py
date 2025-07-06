@@ -10,11 +10,13 @@ import sys
 from fastapi.staticfiles import StaticFiles
 
 from app.routers import auth, files, tasks, attachments, metadata, scene, public_models , streams
-from app.routers import iot  # 新增
+from app.routers import iot_bindings  # 新的IoT绑定系统
 from app.routers import threedtiles  # 新增3DTiles路由
 from app.routers import wmts  # 新增WMTS路由
 from app.routers import gaussian_splat  # 新增高斯泼溅路由
 from app.routers import websocket  # 新增WebSocket路由
+from app.routers import mqtt  # 新增MQTT连接配置路由
+from app.routers import http  # 新增HTTP连接配置路由
 # from app.routers import charts  # 新增图表管理路由
 from app.routers import goview  # 新增GoView路由
 from app.models.user import UserRole
@@ -84,7 +86,6 @@ app.include_router(files.router, prefix="/files", tags=["文件操作"])
 app.include_router(tasks.router, prefix="/tasks", tags=["任务管理"])
 app.include_router(attachments.router, prefix="/attachments", tags=["附件管理"])
 app.include_router(metadata.router, prefix="/metadata", tags=["元数据管理"])
-app.include_router(iot.router, prefix="/iot", tags=["iot"])  # 新增
 app.include_router(scene.router, prefix="", tags=["场景管理"])
 app.include_router(public_models.router, prefix="/public-models", tags=["公共模型"])  # 添加公共模型路由
 app.include_router(threedtiles.router, prefix="/3dtiles", tags=["3DTiles模型"])  # 添加3DTiles路由
@@ -92,6 +93,9 @@ app.include_router(wmts.router, prefix="/wmts", tags=["WMTS瓦片服务"])  # �
 app.include_router(gaussian_splat.router, prefix="/gaussian-splats", tags=["高斯泼溅"])  # 添加高斯泼溅路由
 app.include_router(streams.router, prefix="/streams", tags=["视频流管理"])  # 新增视频流路由
 app.include_router(websocket.router, prefix="/websockets", tags=["WebSocket数据源"])  # 新增WebSocket路由
+app.include_router(mqtt.router, prefix="/mqtt", tags=["MQTT连接配置"])  # 新增MQTT连接配置路由
+app.include_router(http.router, prefix="/http", tags=["HTTP连接配置"])  # 新增HTTP连接配置路由
+app.include_router(iot_bindings.router, prefix="", tags=["IoT绑定"])  # 新的IoT绑定系统
 # app.include_router(charts.router, prefix="/charts", tags=["图表管理"])  # 新增图表管理路由
 app.include_router(goview.router, prefix="/goview", tags=["GoView"])  # 新增GoView路由
 

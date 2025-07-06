@@ -1,4 +1,4 @@
-import api from './api';
+import api from './axiosConfig';
 
 export interface WebSocketDataSource {
   id: string;

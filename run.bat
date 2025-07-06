@@ -13,6 +13,6 @@ where python
 
 REM 启动服务
 start "FastAPI Main" cmd /c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
-start "MQTT Gateway" cmd /c "python -m app.iot.mqtt_gateway"
+@REM start "MQTT Gateway" cmd /c "python -m app.iot.mqtt_gateway"
 
 endlocal

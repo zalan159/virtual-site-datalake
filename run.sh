@@ -12,8 +12,8 @@ source .venv/bin/activate
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
 echo "Main service started (PID: $!)"
 
-python -m app.iot.mqtt_gateway  &
-echo "MQTT Gateway started (PID: $!)"
+# python -m app.iot.mqtt_gateway  &
+# echo "MQTT Gateway started (PID: $!)"
 
 # 等待并捕获Ctrl+C
 trap 'kill $(jobs -p)' SIGINT

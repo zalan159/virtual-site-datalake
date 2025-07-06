@@ -1,3 +1,20 @@
+"""
+DEPRECATED: This file is deprecated and will be removed in a future version.
+
+According to the IoT binding upgrade plan, the backend MQTT connection pool approach
+has been replaced with a frontend-driven real-time connection model. This change
+provides better scalability, lower latency, and more flexibility.
+
+New approach:
+- Frontend manages MQTT/WebSocket/HTTP connections directly
+- Backend only stores configuration and binding settings
+- No long-term connection pooling on the backend
+- Improved real-time performance and resource efficiency
+
+This file should not be used for new development. Please refer to the new
+IoT binding system in app/models/scene.py and related services.
+"""
+
 import asyncio
 import logging
 import json
@@ -8,9 +25,19 @@ from collections import defaultdict
 from aiomqtt import Client, MqttError
 import redis.asyncio as aioredis
 
-from app.models.iot import BrokerConfig, UserTopicSubscription
+from app.models.iot_bindings import BrokerConfig, UserTopicSubscription
+
+# Add deprecation warning
+import warnings
+warnings.warn(
+    "app.iot.connection_pool is deprecated and will be removed in a future version. "
+    "Use the new frontend-driven IoT binding system instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 logger = logging.getLogger("mqtt_connection_pool")
+logger.warning("DEPRECATED: connection_pool.py is deprecated. Use new IoT binding system instead.")
 
 # 全局共享对象
 redis_pool: Optional[aioredis.Redis] = None

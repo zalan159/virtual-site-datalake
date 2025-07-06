@@ -10,36 +10,15 @@ from typing import Optional, List, Dict, Any, Literal
 from enum import Enum
 
 # ------------------------------------------------------------------------------
-#  IoT绑定相关枚举和模型
+#  IoT绑定相关导入
 # ------------------------------------------------------------------------------
 
-class IoTProtocolType(str, Enum):
-    """IoT通信协议类型"""
-    MQTT = "mqtt"
-    WEBSOCKET = "websocket"
-
-class IoTDataType(str, Enum):
-    """IoT数据传输类型"""
-    TEXT = "text"              # 纯文本
-    JSON = "json"              # JSON字符串
-    BINARY = "binary"          # 二进制数据（暂不支持绑定）
-    IMAGE_BASE64 = "image_base64"  # Base64编码的图像
-    IMAGE_RGBA = "image_rgba"      # RGBA矩阵格式的图像
-    NUMBER = "number"          # 数值类型
-    BOOLEAN = "boolean"        # 布尔类型
-
-class BindingDirection(int, Enum):
-    """绑定通信方向"""
-    IOT_TO_INSTANCE = 0    # IoT -> Instance
-    INSTANCE_TO_IOT = 1    # Instance -> IoT
-    BIDIRECTIONAL = 2      # 双向通信
-
-class InterpolationType(str, Enum):
-    """插值类型"""
-    NONE = "none"          # 无插值
-    LINEAR = "linear"      # 线性插值
-    SMOOTH = "smooth"      # 平滑插值（三次样条）
-    STEP = "step"          # 阶梯插值
+from .iot_bindings import (
+    IoTProtocolType, IoTDataType, BindingDirection, InterpolationType, TriggerType,
+    ValueMapping, InterpolationConfig, BindingCondition, TriggerResult, 
+    NodeBinding, HTTPConfig, IoTBinding, IoTBindingCreate, IoTBindingUpdate,
+    IoTBindingValidation, IoTBindingBatchCreate, IoTBindingBatchUpdate
+)
 
 # GLTF 2.0 标准材质定义
 class GLTFMaterialPBR(BaseModel):
@@ -62,65 +41,7 @@ class GLTFMaterial(BaseModel):
     alphaCutoff: Optional[float] = Field(default=0.5, ge=0.0, le=1.0)
     doubleSided: Optional[bool] = False
 
-# IoT绑定配置模型
-class ValueMapping(BaseModel):
-    """数值映射配置"""
-    inputMin: float = 0.0
-    inputMax: float = 100.0
-    outputMin: float = 0.0
-    outputMax: float = 1.0
-    clamp: bool = True  # 是否限制输出范围
-
-class InterpolationConfig(BaseModel):
-    """插值配置"""
-    type: InterpolationType = InterpolationType.LINEAR
-    duration: float = 1.0  # 插值持续时间（秒）
-    easing: Optional[str] = None  # 缓动函数类型
-
-class BindingCondition(BaseModel):
-    """绑定触发条件"""
-    field: str  # 监听的字段路径
-    operator: Literal["eq", "ne", "gt", "lt", "gte", "lte", "in", "contains"]
-    value: Any  # 比较值
-    
-class IoTBinding(BaseModel):
-    """IoT绑定配置"""
-    # 基础信息
-    id: str = Field(description="绑定唯一标识")
-    name: Optional[str] = Field(default=None, description="绑定名称")
-    enabled: bool = Field(default=True, description="是否启用")
-    
-    # IoT数据源
-    protocol: IoTProtocolType = Field(description="通信协议类型")
-    dataType: IoTDataType = Field(description="数据类型")
-    sourceId: str = Field(description="IoT数据源ID（MongoDB文档ID）")
-    
-    # 绑定映射
-    bindings: List[Dict[str, Any]] = Field(
-        default=[],
-        description="绑定关系数组，格式：[{source: 'iot.path', target: 'instance.path', direction: 0}]"
-    )
-    
-    # 数据处理
-    valueMapping: Optional[ValueMapping] = Field(default=None, description="数值映射配置")
-    interpolation: Optional[InterpolationConfig] = Field(default=None, description="插值配置")
-    
-    # 条件触发
-    conditions: Optional[List[BindingCondition]] = Field(
-        default=None,
-        description="触发条件列表（AND关系）"
-    )
-    
-    # 高级配置
-    updateInterval: Optional[float] = Field(
-        default=None,
-        description="更新间隔（毫秒），用于限制更新频率"
-    )
-    transform: Optional[str] = Field(
-        default=None,
-        description="数据转换脚本（JavaScript表达式）"
-    )
-    metadata: Optional[Dict[str, Any]] = Field(default={}, description="扩展元数据")
+# IoT绑定相关模型已从 app.models.iot 导入，无需重复定义
 
 # ------------------------------------------------------------------------------
 #  关系类型（带属性的边）

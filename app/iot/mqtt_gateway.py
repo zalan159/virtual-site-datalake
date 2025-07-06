@@ -1,3 +1,20 @@
+"""
+DEPRECATED: This file is deprecated and will be removed in a future version.
+
+According to the IoT binding upgrade plan, the backend MQTT gateway approach
+has been replaced with a frontend-driven real-time connection model. This change
+provides better scalability, lower latency, and more flexibility.
+
+New approach:
+- Frontend manages MQTT/WebSocket/HTTP connections directly
+- Backend only stores configuration and binding settings
+- No long-term gateway processes on the backend
+- Improved real-time performance and resource efficiency
+
+This file should not be used for new development. Please refer to the new
+IoT binding system in app/models/scene.py and related services.
+"""
+
 import asyncio
 from aiomqtt import Client, MqttError  # ✅ 使用新的 aiomqtt 2.x API
 import redis.asyncio as aioredis
@@ -13,8 +30,17 @@ from dotenv import load_dotenv
 import sys
 import asyncio
 from app.iot.connection_pool import ConnectionPool, init_connection_pool
-from app.models.iot import BrokerConfig, TopicSubscription, UserTopicSubscription
+from app.models.iot_bindings import BrokerConfig, TopicSubscription, UserTopicSubscription
 from bson import ObjectId
+
+# Add deprecation warning
+import warnings
+warnings.warn(
+    "app.iot.mqtt_gateway is deprecated and will be removed in a future version. "
+    "Use the new frontend-driven IoT binding system instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 if sys.platform.startswith('win'):
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -24,6 +50,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger("mqtt_gateway")
+logger.warning("DEPRECATED: mqtt_gateway.py is deprecated. Use new IoT binding system instead.")
 
 # --------------------------- 加载 .env --------------------------
 load_dotenv()
