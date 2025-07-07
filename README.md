@@ -338,7 +338,7 @@ https://github.com/user-attachments/assets/100a5935-31ec-4698-ae4a-0e95752661e9
 
 # 加入开发者社区
 
-<img src="https://github.com/user-attachments/assets/ce19b80a-e830-43e3-b2a4-d0cb1f669f2c" alt="image" width="30%" />
+<img src="https://github.com/user-attachments/assets/3c3c4e38-9f7f-4de2-b82d-dc60c77df22a" alt="image" width="30%" />
 
 ## 版本 0.3.0 重大更新
 
