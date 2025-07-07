@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.routers import auth, files, tasks, attachments, metadata, scene, public_models , streams
 from app.routers import iot_bindings  # 新的IoT绑定系统
+from app.routers import iot_connections  # 新增IoT连接统一管理路由
 from app.routers import threedtiles  # 新增3DTiles路由
 from app.routers import wmts  # 新增WMTS路由
 from app.routers import gaussian_splat  # 新增高斯泼溅路由
@@ -95,6 +96,7 @@ app.include_router(streams.router, prefix="/streams", tags=["视频流管理"]) 
 app.include_router(websocket.router, prefix="/websockets", tags=["WebSocket数据源"])  # 新增WebSocket路由
 app.include_router(mqtt.router, prefix="/mqtt", tags=["MQTT连接配置"])  # 新增MQTT连接配置路由
 app.include_router(http.router, prefix="/http", tags=["HTTP连接配置"])  # 新增HTTP连接配置路由
+app.include_router(iot_connections.router, prefix="/iot", tags=["IoT连接统一管理"])  # 新增IoT连接统一管理路由
 app.include_router(iot_bindings.router, prefix="", tags=["IoT绑定"])  # 新的IoT绑定系统
 # app.include_router(charts.router, prefix="/charts", tags=["图表管理"])  # 新增图表管理路由
 app.include_router(goview.router, prefix="/goview", tags=["GoView"])  # 新增GoView路由

@@ -142,8 +142,20 @@ export const useCesiumAnimation = (
 
   // 获取选中模型的动画信息
   const loadModelAnimations = useCallback(async (modelId: string) => {
-    if (!viewerRef.current || !modelId) return;
+    console.log('🔍 loadModelAnimations 函数执行:', { 
+      modelId, 
+      hasViewer: !!viewerRef.current 
+    });
+    
+    if (!viewerRef.current || !modelId) {
+      console.log('❌ loadModelAnimations 条件不满足:', { 
+        hasViewer: !!viewerRef.current, 
+        hasModelId: !!modelId 
+      });
+      return;
+    }
 
+    console.log('⏳ 开始加载动画，设置 isLoading = true');
     setAnimationState(prev => ({ ...prev, isLoading: true }));
 
     try {
@@ -152,16 +164,36 @@ export const useCesiumAnimation = (
       
       // 查找对应的模型
       let targetModel: Cesium.Model | null = null;
+      console.log('🔍 开始查找目标模型:', { 
+        modelId, 
+        primitivesCount: primitives.length 
+      });
+      
       for (let i = 0; i < primitives.length; i++) {
         const primitive = primitives.get(i);
         
-        if (primitive instanceof Cesium.Model && ((primitive as any).instanceId === modelId || (primitive as any).id === modelId)) {
-          targetModel = primitive;
-          break;
+        if (primitive instanceof Cesium.Model) {
+          const instanceId = (primitive as any).instanceId;
+          const id = (primitive as any).id;
+          
+          console.log(`📦 检查模型 ${i}:`, {
+            instanceId,
+            id,
+            targetModelId: modelId,
+            instanceIdMatch: instanceId === modelId,
+            idMatch: id === modelId
+          });
+          
+          if (instanceId === modelId || id === modelId) {
+            targetModel = primitive;
+            console.log('✅ 找到目标模型:', { modelIndex: i, targetModel });
+            break;
+          }
         }
       }
 
       if (!targetModel) {
+        console.log('❌ 未找到目标模型，设置空状态');
         setAnimationState(prev => ({
           ...prev,
           isLoading: false,
@@ -512,6 +544,12 @@ export const useCesiumAnimation = (
       }
 
       // 更新状态
+      console.log('📊 更新动画状态:', {
+        modelId,
+        animationsCount: animations.length,
+        boneNodesCount: modelNodes.length
+      });
+      
       setAnimationState(prev => ({
         ...prev,
         isLoading: false,
@@ -524,15 +562,29 @@ export const useCesiumAnimation = (
           selectedClipId: animations.length > 0 ? animations[0].id : null,
         },
       }));
+      
+      console.log('✅ 动画状态更新完成:', { 
+        selectedModelId: modelId,
+        animationsLoaded: animations.length,
+        nodesLoaded: modelNodes.length
+      });
 
     } catch (error) {
-      console.error('加载模型动画失败:', error);
+      console.error('❌ 加载模型动画失败:', error);
+      console.error('❌ 错误详情:', {
+        modelId,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined
+      });
+      
       setAnimationState(prev => ({
         ...prev,
         isLoading: false,
         animations: [],
         boneNodes: [],
       }));
+      
+      console.log('🔄 错误状态更新完成');
     }
   }, [viewerRef]);
 
@@ -784,8 +836,26 @@ export const useCesiumAnimation = (
     translation?: [number, number, number];
     rotation?: [number, number, number, number];
     scale?: [number, number, number];
-  }) => {
-    if (!viewerRef.current || !animationState.selectedModelId) {
+  }, targetModelId?: string) => {
+    // 🆕 支持传入具体的模型ID，如果没有传入则使用全局选中的模型ID
+    const modelId = targetModelId || animationState.selectedModelId;
+    
+    console.log('🎯 updateNodeTransform 开始执行:', { 
+      nodeId, 
+      transform, 
+      hasViewer: !!viewerRef.current, 
+      targetModelId: targetModelId,
+      globalSelectedModelId: animationState.selectedModelId,
+      finalModelId: modelId
+    });
+    
+    if (!viewerRef.current || !modelId) {
+      console.log('❌ 缺少必要条件:', { 
+        hasViewer: !!viewerRef.current, 
+        targetModelId: targetModelId,
+        globalSelectedModelId: animationState.selectedModelId,
+        finalModelId: modelId
+      });
       return;
     }
 
@@ -795,31 +865,67 @@ export const useCesiumAnimation = (
       
       // 查找对应的模型
       let targetModel: Cesium.Model | null = null;
+      console.log('🔍 开始查找模型，总图元数量:', primitives.length);
+      
       for (let i = 0; i < primitives.length; i++) {
         const primitive = primitives.get(i);
-        if (primitive instanceof Cesium.Model && (primitive as any).instanceId === animationState.selectedModelId) {
-          targetModel = primitive;
-          break;
+        if (primitive instanceof Cesium.Model) {
+          console.log(`📦 检查模型 ${i}:`, {
+            instanceId: (primitive as any).instanceId,
+            id: (primitive as any).id,
+            targetModelId: modelId,
+            instanceIdMatch: (primitive as any).instanceId === modelId,
+            idMatch: (primitive as any).id === modelId
+          });
+          
+          if ((primitive as any).instanceId === modelId || (primitive as any).id === modelId) {
+            targetModel = primitive;
+            console.log('✅ 找到目标模型:', targetModel);
+            break;
+          }
         }
       }
 
       if (!targetModel) {
+        console.log('❌ 未找到目标模型，modelId:', modelId);
         return;
       }
 
       // 尝试获取节点
       const nodeIndex = parseInt(nodeId.replace('node_', ''));
+      console.log('🔍 解析节点ID:', { nodeId, nodeIndex });
       
       // 尝试从runtime nodes获取节点
       let runtimeNode: any = null;
       if ((targetModel as any)._sceneGraph && (targetModel as any)._sceneGraph._runtimeNodes) {
         const runtimeNodes = (targetModel as any)._sceneGraph._runtimeNodes;
+        console.log('📋 Runtime节点信息:', {
+          hasSceneGraph: !!(targetModel as any)._sceneGraph,
+          hasRuntimeNodes: !!runtimeNodes,
+          runtimeNodesLength: runtimeNodes ? runtimeNodes.length : 0,
+          nodeIndex: nodeIndex,
+          isValidIndex: nodeIndex >= 0 && nodeIndex < (runtimeNodes ? runtimeNodes.length : 0)
+        });
+        
         if (nodeIndex >= 0 && nodeIndex < runtimeNodes.length) {
           runtimeNode = runtimeNodes[nodeIndex];
+          console.log('✅ 找到runtime节点:', runtimeNode ? '存在' : '为null', {
+            nodeName: runtimeNode?.name,
+            hasTransform: !!runtimeNode?.transform,
+            hasChildren: !!(runtimeNode?.children && runtimeNode.children.length > 0)
+          });
+        } else {
+          console.log('❌ 节点索引无效:', { nodeIndex, runtimeNodesLength: runtimeNodes.length });
         }
+      } else {
+        console.log('❌ 无法访问sceneGraph或runtimeNodes:', {
+          hasSceneGraph: !!(targetModel as any)._sceneGraph,
+          hasRuntimeNodes: !!(targetModel as any)._sceneGraph?._runtimeNodes
+        });
       }
 
       if (!runtimeNode) {
+        console.log('❌ 未找到runtime节点，退出');
         return;
       }
 
@@ -892,6 +998,12 @@ export const useCesiumAnimation = (
               transform.translation[1],
               transform.translation[2]
             );
+            
+            console.log('📍 应用位移变换:', {
+              original: [trs.translation.x, trs.translation.y, trs.translation.z],
+              new: transform.translation,
+              vector: translationVector
+            });
             
             trs.translation = translationVector;
           }
@@ -1006,6 +1118,13 @@ export const useCesiumAnimation = (
           // 方法3: 只请求一次渲染更新
           viewer.scene.requestRender();
           
+          console.log('🎉 节点变换应用成功，已请求渲染更新:', {
+            nodeId,
+            nodeIndex,
+            transformApplied: transform,
+            runtimeNodeUpdated: true
+          });
+          
           // 方法4: 尝试直接更新WebGL渲染状态（如果可能）
           try {
             if ((targetModel as any)._sceneGraph && (targetModel as any)._sceneGraph._runtime) {
@@ -1054,12 +1173,20 @@ export const useCesiumAnimation = (
       console.error('更新节点变换失败:', error);
       throw error;
     }
-  }, [viewerRef, animationState.selectedModelId]);
+  }, [viewerRef, animationState]);
 
   // 当选中模型改变时，加载动画
   useEffect(() => {
+    console.log('🔄 useCesiumAnimation useEffect 触发:', { 
+      selectedModelId, 
+      hasSelectedModelId: !!selectedModelId 
+    });
+    
     if (selectedModelId) {
+      console.log('🚀 开始加载模型动画:', selectedModelId);
       loadModelAnimations(selectedModelId);
+    } else {
+      console.log('⚠️ selectedModelId 为空，不加载动画');
     }
   }, [selectedModelId, loadModelAnimations]);
 

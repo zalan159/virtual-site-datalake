@@ -15,7 +15,8 @@ from app.models.user import UserInDB
 from app.models.scene import Scene, Instance
 from app.models.iot_bindings import (
     IoTBinding, IoTBindingCreate, IoTBindingUpdate, IoTBindingValidation,
-    IoTBindingBatchCreate, IoTBindingBatchUpdate, IoTProtocolType, IoTDataType
+    IoTBindingBatchCreate, IoTBindingBatchUpdate, IoTProtocolType, IoTDataType,
+    IoTBindingWithInstance
 )
 
 router = APIRouter(tags=["iot-bindings"])
@@ -722,6 +723,62 @@ async def send_command(
 # ------------------------------------------------------------------------------
 #  统计和查询API
 # ------------------------------------------------------------------------------
+
+@router.get("/scenes/{scene_id}/iot-bindings/all", response_model=List[IoTBindingWithInstance])
+async def get_scene_all_iot_bindings(
+    scene_id: str,
+    current_user: UserInDB = Depends(get_current_active_user)
+):
+    """获取场景中所有实例的IoT绑定配置"""
+    try:
+        logger.info(f"获取场景所有IoT绑定: scene_id={scene_id}, user_id={current_user.id}")
+        
+        # 验证场景所有权
+        scene = Scene.nodes.get_or_none(uid=scene_id, owner=str(current_user.id))
+        if not scene:
+            raise HTTPException(status_code=404, detail="场景不存在或无访问权限")
+        
+        root_instance = scene.root.single()
+        if not root_instance:
+            raise HTTPException(status_code=404, detail="场景根实例不存在")
+        
+        # 收集所有实例的IoT绑定
+        all_bindings = []
+        
+        def collect_instance_bindings(instance: Instance):
+            """递归收集实例及其子实例的IoT绑定"""
+            iot_binds = getattr(instance, 'iot_binds', None) or []
+            
+            for binding_data in iot_binds:
+                try:
+                    # 解析绑定数据并添加实例信息
+                    binding = IoTBinding(**binding_data)
+                    # 创建包含实例信息的扩展绑定对象
+                    binding_with_instance = IoTBindingWithInstance(
+                        **binding.model_dump(),
+                        instanceId=instance.uid,
+                        instanceName=instance.name
+                    )
+                    all_bindings.append(binding_with_instance)
+                    
+                except Exception as e:
+                    logger.warning(f"跳过实例 {instance.uid} 的无效绑定配置: {e}")
+            
+            # 递归处理子实例
+            for child in instance.children:
+                collect_instance_bindings(child)
+        
+        # 从根实例开始收集
+        collect_instance_bindings(root_instance)
+        
+        logger.info(f"场景 {scene_id} 总共找到 {len(all_bindings)} 个IoT绑定")
+        return all_bindings
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取场景所有IoT绑定失败: {e}")
+        raise HTTPException(status_code=500, detail=f"内部服务器错误: {str(e)}")
 
 @router.get("/scenes/{scene_id}/iot-bindings/summary")
 async def get_scene_iot_bindings_summary(

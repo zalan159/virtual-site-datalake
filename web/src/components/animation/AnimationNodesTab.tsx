@@ -161,7 +161,7 @@ export const AnimationNodesTab: React.FC<AnimationNodesTabProps> = ({
   const treeData = convertToTreeData(boneNodes);
 
   // 更新节点变换值
-  const updateNodeTransform = useCallback((
+  const updateNodeTransformLocal = useCallback((
     type: 'translation' | 'rotation' | 'scale',
     index: number,
     value: number | null
@@ -264,7 +264,7 @@ export const AnimationNodesTab: React.FC<AnimationNodesTabProps> = ({
                             <InputNumber
                               size="small"
                               value={selectedNode.translation?.[index] || 0}
-                              onChange={(value) => updateNodeTransform('translation', index, value)}
+                              onChange={(value) => updateNodeTransformLocal('translation', index, value)}
                               placeholder={['X', 'Y', 'Z'][index]}
                               step={0.1}
                               style={{ width: '100%' }}
@@ -283,7 +283,7 @@ export const AnimationNodesTab: React.FC<AnimationNodesTabProps> = ({
                             <InputNumber
                               size="small"
                               value={selectedNode.rotation?.[index] || (index === 3 ? 1 : 0)}
-                              onChange={(value) => updateNodeTransform('rotation', index, value)}
+                              onChange={(value) => updateNodeTransformLocal('rotation', index, value)}
                               placeholder={['X', 'Y', 'Z', 'W'][index]}
                               step={0.1}
                               min={index === 3 ? undefined : -1}
@@ -304,7 +304,7 @@ export const AnimationNodesTab: React.FC<AnimationNodesTabProps> = ({
                             <InputNumber
                               size="small"
                               value={selectedNode.scale?.[index] || 1}
-                              onChange={(value) => updateNodeTransform('scale', index, value)}
+                              onChange={(value) => updateNodeTransformLocal('scale', index, value)}
                               placeholder={['X', 'Y', 'Z'][index]}
                               step={0.1}
                               min={0.01}

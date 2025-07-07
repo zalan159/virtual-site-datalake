@@ -4,6 +4,7 @@ import { Empty, Spin, Tabs, App as AntdApp, Card } from 'antd';
 import { SelectedModelInfo } from '../hooks/useCesiumInteractions';
 import DynamicPropertyForm from './DynamicPropertyForm';
 import { getInstanceProperties, updateInstanceProperties } from '../services/sceneApi';
+import { AnimationManagerState } from '../types/animation';
 
 interface SelectedModelPropertiesPanelProps {
   selectedModelInfo: SelectedModelInfo | null;
@@ -15,11 +16,17 @@ interface SelectedModelPropertiesPanelProps {
       scale: number[];
     };
   } | null;
+  viewerRef?: React.RefObject<any>;
+  selectedModelId?: string | null;
+  animationState?: AnimationManagerState;
 }
 
 export const SelectedModelPropertiesPanel: React.FC<SelectedModelPropertiesPanelProps> = ({
   selectedModelInfo,
-  realtimeTransform
+  realtimeTransform,
+  viewerRef,
+  selectedModelId,
+  animationState
 }) => {
   const [loading, setLoading] = useState(false);
   const [propertiesData, setPropertiesData] = useState<any>(null);
@@ -127,6 +134,9 @@ export const SelectedModelPropertiesPanel: React.FC<SelectedModelPropertiesPanel
           onSave={handleSave}
           onRefresh={() => loadModelProperties(selectedModelInfo.id)}
           sectionTitle="模型属性"
+          viewerRef={viewerRef}
+          selectedModelId={selectedModelId || selectedModelInfo.id}
+          animationState={animationState}
           // isGrouped={true}
         />
       );

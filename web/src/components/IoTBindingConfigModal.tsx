@@ -14,13 +14,11 @@ import {
   Col,
   Typography,
   Alert,
-  Tabs,
   Tag,
   message,
   Collapse,
   Divider,
-  Spin,
-  theme
+  Spin
 } from 'antd';
 import {
   PlusOutlined,
@@ -36,12 +34,10 @@ import {
 import {
   iotBindingAPI,
   IoTBinding,
-  IoTBindingCreate,
   IoTProtocolType,
   IoTDataType,
   BindingDirection,
   InterpolationType,
-  TriggerType,
   ConnectionInfo,
   ValidationResult
 } from '../services/iotBindingApi';
@@ -49,6 +45,7 @@ import { mqttAPI } from '../services/mqttApi';
 import { httpAPI } from '../services/httpApi';
 import { websocketAPI } from '../services/websocketApi';
 import DataPathHelper, { DataPreviewModal } from './DataPathHelper';
+import { AnimationManagerState } from '../types/animation';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -62,6 +59,9 @@ interface IoTBindingConfigModalProps {
   editingBinding?: IoTBinding | null;
   onClose: () => void;
   onSave: (binding: IoTBinding) => void;
+  viewerRef?: React.RefObject<any>;
+  selectedModelId?: string | null;
+  animationState?: AnimationManagerState;
 }
 
 const IoTBindingConfigModal: React.FC<IoTBindingConfigModalProps> = ({
@@ -70,7 +70,10 @@ const IoTBindingConfigModal: React.FC<IoTBindingConfigModalProps> = ({
   sceneId,
   editingBinding,
   onClose,
-  onSave
+  onSave,
+  viewerRef,
+  selectedModelId,
+  animationState
 }) => {
   const [form] = Form.useForm();
   const [currentStep, setCurrentStep] = useState(0);
@@ -847,15 +850,20 @@ const IoTBindingConfigModal: React.FC<IoTBindingConfigModalProps> = ({
                 loading={loading}
                 size="large"
                 showSearch
+                optionLabelProp="label"
                 filterOption={(input, option) =>
-                  option?.children?.toString().toLowerCase().includes(input.toLowerCase()) ?? false
+                  option?.label?.toString().toLowerCase().includes(input.toLowerCase()) ?? false
                 }
                 notFoundContent={loading ? "加载中..." : "暂无可用的连接配置"}
               >
                 {connections
                   .filter(connection => connection.protocol === selectedProtocol)
                   .map(connection => (
-                  <Option key={connection.id} value={connection.id}>
+                  <Option 
+                    key={connection.id} 
+                    value={connection.id}
+                    label={`${connection.name}${connection.is_public ? ' (公共)' : ''}`}
+                  >
                     <div>
                       <div style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
                         <CloudOutlined style={{ marginRight: 8, color: '#1890ff' }} />
@@ -1031,6 +1039,10 @@ const IoTBindingConfigModal: React.FC<IoTBindingConfigModalProps> = ({
                         connectionId={selectedConnection.id}
                         instanceId={instanceId}
                         sceneId={sceneId}
+                        modelId={instanceId} // 使用instanceId作为modelId
+                        viewerRef={viewerRef}
+                        selectedModelId={selectedModelId || instanceId}
+                        animationState={animationState}
                         onSourcePathSelect={(path) => {
                           console.log('🔧 DataPathHelper 源路径选择:', { path, bindingIndex: name });
                           handleSourcePathSelect(path, name);
@@ -1429,6 +1441,7 @@ const IoTBindingConfigModal: React.FC<IoTBindingConfigModalProps> = ({
       width={800}
       destroyOnClose={false}
       forceRender
+      zIndex={1010}
     >
       <Steps current={currentStep} items={steps} style={{ marginBottom: 24 }} />
 

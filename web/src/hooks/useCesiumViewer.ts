@@ -361,6 +361,26 @@ export const useCesiumViewer = (
           (model as any).name = instance.name;
           (model as any).instanceId = instance.uid;
           
+          // 🔧 保存原始旋转数据（用于IoT更新时保持正确的方向）
+          if (rotation && rotation.length === 3) {
+            (model as any).originalRotation = {
+              heading: Cesium.Math.toRadians(rotation[0] || 0),
+              pitch: Cesium.Math.toRadians(rotation[1] || 0),
+              roll: Cesium.Math.toRadians(rotation[2] || 0)
+            };
+            console.log(`保存原始旋转数据 [${instance.name}]:`, {
+              originalDegrees: rotation,
+              originalRadians: (model as any).originalRotation
+            });
+          } else {
+            // 如果没有旋转数据，保存默认值（0, 0, 0）
+            (model as any).originalRotation = {
+              heading: 0,
+              pitch: 0,
+              roll: 0
+            };
+          }
+          
           // 应用材质（如果有）
           if (instance.materials && instance.materials.length > 0) {
             // 这里应该根据实际情况处理材质应用

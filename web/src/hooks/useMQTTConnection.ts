@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { message } from 'antd';
 import mqtt, { MqttClient, IClientOptions } from 'mqtt';
+import { IoTDataProcessor, ProcessedData } from '../utils/iotDataProcessor';
+import { IoTDataType } from '../services/iotBindingApi';
 
 // MQTT QoS levels
 export type QoS = 0 | 1 | 2;
@@ -9,6 +11,7 @@ export interface MQTTMessage {
   id: string;
   topic: string;
   payload: string;
+  processedData?: ProcessedData;
   direction: 'sent' | 'received';
   timestamp: string;
   qos?: QoS;
@@ -41,6 +44,8 @@ export interface UseMQTTConnectionReturn {
   subscribe: (topic: string, qos?: QoS) => void;
   unsubscribe: (topic: string) => void;
   publish: (topic: string, message: string, qos?: QoS, retain?: boolean) => void;
+  publishTyped: (topic: string, data: any, dataType: IoTDataType, qos?: QoS, retain?: boolean) => void;
+  processMessage: (payload: Buffer | string, dataType: IoTDataType) => ProcessedData;
   isConnected: boolean;
   isConnecting: boolean;
   messages: MQTTMessage[];
@@ -75,12 +80,14 @@ export const useMQTTConnection = (
     payload: string, 
     direction: 'sent' | 'received',
     qos?: QoS,
-    retain?: boolean
+    retain?: boolean,
+    processedData?: ProcessedData
   ) => {
     const newMessage: MQTTMessage = {
       id: generateMessageId(),
       topic,
       payload,
+      processedData,
       direction,
       timestamp: new Date().toISOString(),
       qos,
@@ -217,7 +224,31 @@ export const useMQTTConnection = (
       client.on('message', (topic, payload, packet) => {
         const message = payload.toString();
         console.log(`收到消息 [${topic}]:`, message);
-        addMessage(topic, message, 'received', packet.qos, packet.retain);
+        
+        // 尝试基于数据内容自动检测数据类型并处理
+        let processedData: ProcessedData | undefined;
+        try {
+          // 自动检测最可能的数据类型
+          const suggestedTypes = IoTDataProcessor.suggestDataTypes(message);
+          if (suggestedTypes.length > 0) {
+            // 优先使用JSON，其次是数值，最后是文本
+            let dataType = IoTDataType.TEXT;
+            if (suggestedTypes.includes(IoTDataType.JSON)) {
+              dataType = IoTDataType.JSON;
+            } else if (suggestedTypes.includes(IoTDataType.NUMBER)) {
+              dataType = IoTDataType.NUMBER;
+            } else if (suggestedTypes.includes(IoTDataType.BOOLEAN)) {
+              dataType = IoTDataType.BOOLEAN;
+            }
+            
+            processedData = IoTDataProcessor.processData(message, dataType);
+            console.log(`自动处理数据类型 [${dataType}]:`, processedData);
+          }
+        } catch (error) {
+          console.warn('自动数据处理失败，使用原始数据:', error);
+        }
+        
+        addMessage(topic, message, 'received', packet.qos, packet.retain, processedData);
       });
 
       client.on('error', (err) => {
@@ -342,6 +373,78 @@ export const useMQTTConnection = (
     });
   }, [isConnected, addMessage]);
 
+  // 处理指定类型的消息
+  const processMessage = useCallback((payload: Buffer | string, dataType: IoTDataType): ProcessedData => {
+    const rawData = Buffer.isBuffer(payload) ? payload : payload;
+    return IoTDataProcessor.processData(rawData, dataType);
+  }, []);
+
+  // 发布指定类型的数据
+  const publishTyped = useCallback((topic: string, data: any, dataType: IoTDataType, qos: QoS = 0, retain: boolean = false) => {
+    if (!clientRef.current || !isConnected) {
+      message.error('请先连接到MQTT Broker');
+      return;
+    }
+
+    try {
+      let messagePayload: string | Buffer;
+      
+      // 根据数据类型处理发送数据
+      switch (dataType) {
+        case IoTDataType.TEXT:
+          messagePayload = String(data);
+          break;
+        case IoTDataType.JSON:
+          messagePayload = typeof data === 'string' ? data : JSON.stringify(data);
+          break;
+        case IoTDataType.NUMBER:
+          messagePayload = String(Number(data));
+          break;
+        case IoTDataType.BOOLEAN:
+          messagePayload = String(Boolean(data));
+          break;
+        case IoTDataType.IMAGE_BASE64:
+          if (typeof data === 'object' && data.base64) {
+            messagePayload = data.base64;
+          } else {
+            messagePayload = String(data);
+          }
+          break;
+        case IoTDataType.BINARY:
+          if (data instanceof Uint8Array) {
+            messagePayload = Buffer.from(data);
+          } else if (Buffer.isBuffer(data)) {
+            messagePayload = data;
+          } else if (Array.isArray(data)) {
+            messagePayload = Buffer.from(data);
+          } else {
+            messagePayload = Buffer.from(String(data), 'utf8');
+          }
+          break;
+        default:
+          messagePayload = String(data);
+      }
+
+      clientRef.current.publish(topic, messagePayload, { qos, retain }, (err) => {
+        if (err) {
+          console.error('发布失败:', err);
+          message.error(`发布消息失败: ${err.message}`);
+          addMessage('system', `发布消息失败: ${err.message}`, 'received');
+        } else {
+          console.log(`已发布 ${dataType} 类型消息到主题 ${topic}:`, data);
+          const displayMessage = Buffer.isBuffer(messagePayload) 
+            ? `[二进制数据 ${messagePayload.length} 字节]` 
+            : String(messagePayload);
+          addMessage(topic, displayMessage, 'sent', qos, retain);
+        }
+      });
+    } catch (error: any) {
+      console.error('处理发布数据失败:', error);
+      message.error(`处理发布数据失败: ${error.message}`);
+      addMessage('system', `处理发布数据失败: ${error.message}`, 'received');
+    }
+  }, [isConnected, addMessage]);
+
   // 清空消息列表
   const clearMessages = useCallback(() => {
     setMessages([]);
@@ -360,6 +463,8 @@ export const useMQTTConnection = (
     subscribe,
     unsubscribe,
     publish,
+    publishTyped,
+    processMessage,
     isConnected,
     isConnecting,
     messages,

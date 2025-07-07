@@ -438,7 +438,14 @@ export const useCesiumGizmo = ({
 
   const clearGizmo = useCallback(() => {
     if (gizmoRef.current) {
-      gizmoRef.current.destroy();
+      try {
+        // 检查viewer是否存在且未被销毁
+        if (viewerRef.current && !viewerRef.current.isDestroyed() && viewerRef.current.scene) {
+          gizmoRef.current.destroy();
+        }
+      } catch (error) {
+        console.warn('销毁Gizmo时发生错误:', error);
+      }
       gizmoRef.current = null;
     }
     // 清除子节点列表
@@ -446,7 +453,7 @@ export const useCesiumGizmo = ({
     lastPositionRef.current = null;
     childInitialMatricesRef.current.clear();
     initialTransformRef.current = null; // 清除初始变换状态
-  }, [gizmoRef]);
+  }, [gizmoRef, viewerRef]);
 
   const toggleGizmoMode = useCallback(async () => {
     if (!gizmoRef.current || !gizmoRef.current.item || !viewerRef.current) return;

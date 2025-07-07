@@ -1,9 +1,12 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { message } from 'antd';
+import { IoTDataProcessor, ProcessedData } from '../utils/iotDataProcessor';
+import { IoTDataType } from '../services/iotBindingApi';
 
 export interface WebSocketMessage {
   id: string;
   content: string;
+  processedData?: ProcessedData;
   direction: 'sent' | 'received';
   timestamp: string;
   type?: string;
@@ -27,6 +30,8 @@ export interface UseWebSocketConnectionReturn {
   connect: () => void;
   disconnect: () => void;
   sendMessage: (message: string) => void;
+  sendTypedData: (data: any, dataType: IoTDataType) => void;
+  processMessage: (data: any, dataType: IoTDataType) => ProcessedData;
   isConnected: boolean;
   isConnecting: boolean;
   messages: WebSocketMessage[];
@@ -57,10 +62,11 @@ export const useWebSocketConnection = (
   };
 
   // 添加消息到列表
-  const addMessage = useCallback((content: string, direction: 'sent' | 'received', type?: string) => {
+  const addMessage = useCallback((content: string, direction: 'sent' | 'received', type?: string, processedData?: ProcessedData) => {
     const newMessage: WebSocketMessage = {
       id: generateMessageId(),
       content,
+      processedData,
       direction,
       timestamp: new Date().toISOString(),
       type
@@ -178,25 +184,55 @@ export const useWebSocketConnection = (
 
       ws.onmessage = (event) => {
         try {
-          // 尝试解析JSON消息
-          const data = JSON.parse(event.data);
-          
-          // 忽略pong消息
-          if (data.type === 'pong') {
-            return;
-          }
-          
-          // 显示消息内容
-          const content = data.message || data.content || data.data || JSON.stringify(data);
-          addMessage(content, 'received');
-        } catch (error) {
-          // 如果不是JSON，直接显示原始数据
           // 忽略ping的回显，避免消息混乱
           if (event.data === 'ping') {
             console.log('收到ping回显，忽略显示');
             return;
           }
-          addMessage(event.data, 'received');
+
+          // 尝试基于数据内容自动检测数据类型并处理
+          let processedData: ProcessedData | undefined;
+          let content: string;
+          
+          try {
+            // 尝试解析JSON消息
+            const data = JSON.parse(event.data);
+            
+            // 忽略pong消息
+            if (data.type === 'pong') {
+              return;
+            }
+            
+            // 自动处理JSON数据
+            processedData = IoTDataProcessor.processData(event.data, IoTDataType.JSON);
+            content = data.message || data.content || data.data || JSON.stringify(data);
+            console.log('处理JSON WebSocket数据:', processedData);
+          } catch (parseError) {
+            // 如果不是JSON，尝试其他数据类型
+            const suggestedTypes = IoTDataProcessor.suggestDataTypes(event.data);
+            if (suggestedTypes.length > 0) {
+              // 优先使用数值，其次是布尔值，最后是文本
+              let dataType = IoTDataType.TEXT;
+              if (suggestedTypes.includes(IoTDataType.NUMBER)) {
+                dataType = IoTDataType.NUMBER;
+              } else if (suggestedTypes.includes(IoTDataType.BOOLEAN)) {
+                dataType = IoTDataType.BOOLEAN;
+              }
+              
+              try {
+                processedData = IoTDataProcessor.processData(event.data, dataType);
+                console.log(`自动处理WebSocket数据类型 [${dataType}]:`, processedData);
+              } catch (error) {
+                console.warn('自动数据处理失败，使用原始数据:', error);
+              }
+            }
+            content = event.data;
+          }
+          
+          addMessage(content, 'received', undefined, processedData);
+        } catch (error) {
+          console.error('处理WebSocket消息失败:', error);
+          addMessage(event.data, 'received', 'error');
         }
       };
 
@@ -305,6 +341,73 @@ export const useWebSocketConnection = (
     }
   }, [addMessage]);
 
+  // 处理指定类型的消息
+  const processMessage = useCallback((data: any, dataType: IoTDataType): ProcessedData => {
+    return IoTDataProcessor.processData(data, dataType);
+  }, []);
+
+  // 发送指定类型的数据
+  const sendTypedData = useCallback((data: any, dataType: IoTDataType) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      message.error('WebSocket未连接，无法发送数据');
+      return;
+    }
+
+    try {
+      let messagePayload: string | ArrayBuffer | Blob;
+      
+      // 根据数据类型处理发送数据
+      switch (dataType) {
+        case IoTDataType.TEXT:
+          messagePayload = String(data);
+          break;
+        case IoTDataType.JSON:
+          messagePayload = typeof data === 'string' ? data : JSON.stringify(data);
+          break;
+        case IoTDataType.NUMBER:
+          messagePayload = String(Number(data));
+          break;
+        case IoTDataType.BOOLEAN:
+          messagePayload = String(Boolean(data));
+          break;
+        case IoTDataType.IMAGE_BASE64:
+          if (typeof data === 'object' && data.base64) {
+            messagePayload = data.base64;
+          } else {
+            messagePayload = String(data);
+          }
+          break;
+        case IoTDataType.BINARY:
+          if (data instanceof Uint8Array) {
+            messagePayload = data.buffer;
+          } else if (data instanceof ArrayBuffer) {
+            messagePayload = data;
+          } else if (Array.isArray(data)) {
+            messagePayload = new Uint8Array(data).buffer;
+          } else {
+            // 转换为UTF-8字节
+            const encoder = new TextEncoder();
+            messagePayload = encoder.encode(String(data)).buffer;
+          }
+          break;
+        default:
+          messagePayload = String(data);
+      }
+
+      wsRef.current.send(messagePayload);
+      
+      const displayMessage = messagePayload instanceof ArrayBuffer 
+        ? `[二进制数据 ${messagePayload.byteLength} 字节]` 
+        : String(messagePayload);
+      
+      addMessage(displayMessage, 'sent');
+      console.log(`已发送 ${dataType} 类型数据:`, data);
+    } catch (error: any) {
+      console.error('处理发送数据失败:', error);
+      message.error(`处理发送数据失败: ${error.message}`);
+    }
+  }, [addMessage]);
+
   // 清除消息
   const clearMessages = useCallback(() => {
     setMessages([]);
@@ -321,6 +424,8 @@ export const useWebSocketConnection = (
     connect,
     disconnect,
     sendMessage,
+    sendTypedData,
+    processMessage,
     isConnected,
     isConnecting,
     messages,

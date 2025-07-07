@@ -1,4 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { IoTDataProcessor, ProcessedData } from '../utils/iotDataProcessor';
+import { IoTDataType } from '../services/iotBindingApi';
 
 export interface HTTPRequestOptions {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
@@ -14,6 +16,8 @@ export interface HTTPRequestOptions {
   api_key?: string;
   api_key_header?: string;
   verify_ssl?: boolean;
+  poll_interval?: number; // 轮询间隔(秒)，0表示不轮询
+  data_type?: IoTDataType; // 期望的数据类型
 }
 
 export interface HTTPResponse {
@@ -21,21 +25,34 @@ export interface HTTPResponse {
   statusText: string;
   headers: Record<string, string>;
   data: any;
+  processedData?: ProcessedData;
   responseTime: number;
   responseSize: number;
+  url: string;
+  isHttps: boolean;
 }
 
 export interface UseHTTPRequestReturn {
   execute: (options: HTTPRequestOptions) => Promise<HTTPResponse>;
+  startPolling: (options: HTTPRequestOptions) => void;
+  stopPolling: () => void;
+  processResponse: (data: any, dataType: IoTDataType) => ProcessedData;
   isLoading: boolean;
+  isPolling: boolean;
   error: string | null;
   lastResponse: HTTPResponse | null;
+  pollCount: number;
 }
 
 export const useHTTPRequest = (): UseHTTPRequestReturn => {
   const [isLoading, setIsLoading] = useState(false);
+  const [isPolling, setIsPolling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastResponse, setLastResponse] = useState<HTTPResponse | null>(null);
+  const [pollCount, setPollCount] = useState(0);
+
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const execute = useCallback(async (options: HTTPRequestOptions): Promise<HTTPResponse> => {
     setIsLoading(true);
@@ -45,8 +62,22 @@ export const useHTTPRequest = (): UseHTTPRequestReturn => {
     let timeoutId: NodeJS.Timeout | undefined;
 
     try {
-      // 构建URL
+      // 构建URL，支持HTTP和HTTPS
       let url = options.url;
+      
+      // 自动检测和处理URL协议
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        // 如果没有协议，根据端口或其他条件推断
+        if (url.includes(':443') || options.verify_ssl !== false) {
+          url = 'https://' + url;
+        } else {
+          url = 'http://' + url;
+        }
+      }
+      
+      const isHttps = url.startsWith('https://');
+      console.log(`执行${isHttps ? 'HTTPS' : 'HTTP'}请求:`, url);
+      
       if (options.params && Object.keys(options.params).length > 0) {
         const searchParams = new URLSearchParams(options.params);
         url += (url.includes('?') ? '&' : '?') + searchParams.toString();
@@ -133,6 +164,27 @@ export const useHTTPRequest = (): UseHTTPRequestReturn => {
         responseData = await response.text();
       }
 
+      // 处理指定的数据类型
+      let processedData: ProcessedData | undefined;
+      if (options.data_type) {
+        try {
+          processedData = IoTDataProcessor.processData(responseData, options.data_type);
+          console.log(`处理${options.data_type}类型响应数据:`, processedData);
+        } catch (error: any) {
+          console.warn(`无法处理为${options.data_type}类型:`, error.message);
+          // 尝试自动检测数据类型
+          const suggestedTypes = IoTDataProcessor.suggestDataTypes(responseData);
+          if (suggestedTypes.length > 0) {
+            try {
+              processedData = IoTDataProcessor.processData(responseData, suggestedTypes[0]);
+              console.log(`自动检测并处理为${suggestedTypes[0]}类型:`, processedData);
+            } catch (autoError) {
+              console.warn('自动数据处理也失败:', autoError);
+            }
+          }
+        }
+      }
+
       // 构建响应头对象
       const responseHeaders: Record<string, string> = {};
       response.headers.forEach((value, key) => {
@@ -147,8 +199,11 @@ export const useHTTPRequest = (): UseHTTPRequestReturn => {
         statusText: response.statusText,
         headers: responseHeaders,
         data: responseData,
+        processedData,
         responseTime,
         responseSize,
+        url,
+        isHttps,
       };
 
       setLastResponse(httpResponse);
@@ -187,10 +242,76 @@ export const useHTTPRequest = (): UseHTTPRequestReturn => {
     }
   }, []);
 
+  // 处理响应数据
+  const processResponse = useCallback((data: any, dataType: IoTDataType): ProcessedData => {
+    return IoTDataProcessor.processData(data, dataType);
+  }, []);
+
+  // 开始轮询
+  const startPolling = useCallback((options: HTTPRequestOptions) => {
+    // 停止之前的轮询
+    stopPolling();
+    
+    if (!options.poll_interval || options.poll_interval <= 0) {
+      console.warn('轮询间隔无效，无法开始轮询');
+      return;
+    }
+
+    setIsPolling(true);
+    setPollCount(0);
+    console.log(`开始轮询，间隔: ${options.poll_interval}秒`);
+
+    // 立即执行第一次请求
+    execute(options).catch(error => {
+      console.error('轮询请求失败:', error);
+    });
+
+    // 设置定时器
+    pollingIntervalRef.current = setInterval(async () => {
+      if (!isPolling) return; // 防止状态不一致
+
+      try {
+        await execute(options);
+        setPollCount(prev => prev + 1);
+      } catch (error) {
+        console.error('轮询请求失败:', error);
+        // 可以选择在多次失败后停止轮询
+      }
+    }, options.poll_interval * 1000);
+  }, [execute, isPolling]);
+
+  // 停止轮询
+  const stopPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+    
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    
+    setIsPolling(false);
+    console.log('已停止轮询');
+  }, []);
+
+  // 清理函数
+  useEffect(() => {
+    return () => {
+      stopPolling();
+    };
+  }, [stopPolling]);
+
   return {
     execute,
+    startPolling,
+    stopPolling,
+    processResponse,
     isLoading,
+    isPolling,
     error,
     lastResponse,
+    pollCount,
   };
 }; 

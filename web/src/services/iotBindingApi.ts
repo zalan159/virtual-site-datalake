@@ -42,6 +42,24 @@ export enum TriggerType {
   EVENT = "event"
 }
 
+// Target路径类型定义
+export enum TargetType {
+  INSTANCE = "instance",
+  NODE = "node", 
+  MATERIAL = "material"
+}
+
+// Target路径规则：
+// instance.{instance property}.{key inside property(if property value is json obj and key exist)}
+// node.{nodeId}.{key inside node property(if property value is json obj and key exist)}
+// material.{materialId}.{key inside material property(if property value is json obj and key exist)}
+export interface TargetPath {
+  type: TargetType;
+  id: string; // instance property name / nodeId / materialId
+  property?: string; // key inside the property if it's a json object
+  fullPath: string; // 完整路径字符串
+}
+
 // 接口定义
 export interface ValueMapping {
   inputMin: number;
@@ -102,6 +120,17 @@ export interface IoTBinding {
   updateInterval?: number;
   transform?: string;
   metadata?: { [key: string]: any };
+  // Target路径规则说明
+  targetPathRules?: {
+    instance: string; // "instance.{instance property}.{key inside property(if property value is json obj and key exist)}"
+    node: string; // "node.{nodeId}.{key inside node property(if property value is json obj and key exist)}"
+    material: string; // "material.{materialId}.{key inside material property(if property value is json obj and key exist)}"
+  };
+}
+
+export interface IoTBindingWithInstance extends IoTBinding {
+  instanceId: string;
+  instanceName?: string;
 }
 
 export interface IoTBindingCreate {
@@ -188,6 +217,10 @@ export interface ProtocolStats {
 
 // API 方法
 export const iotBindingAPI = {
+  // 获取场景中所有实例的IoT绑定列表（新增）
+  getSceneBindings: (sceneId: string) =>
+    api.get<IoTBindingWithInstance[]>(`/scenes/${sceneId}/iot-bindings/all`),
+
   // 获取场景实例的IoT绑定列表
   getInstanceBindings: (sceneId: string, instanceId: string) =>
     api.get<IoTBinding[]>(`/scenes/${sceneId}/instances/${instanceId}/iot-bindings`),
@@ -248,4 +281,38 @@ export const iotBindingAPI = {
   // 测试连接配置
   testConnection: (connectionId: string) =>
     api.post(`/iot/connections/${connectionId}/test`),
+
+  // Target路径解析工具
+  parseTargetPath: (targetPath: string): TargetPath | null => {
+    const parts = targetPath.split('.');
+    if (parts.length < 2) return null;
+    
+    const type = parts[0] as TargetType;
+    const id = parts[1];
+    const property = parts.length > 2 ? parts.slice(2).join('.') : undefined;
+    
+    if (!Object.values(TargetType).includes(type)) return null;
+    
+    return {
+      type,
+      id,
+      property,
+      fullPath: targetPath
+    };
+  },
+
+  // 构建 Target路径
+  buildTargetPath: (type: TargetType, id: string, property?: string): string => {
+    let path = `${type}.${id}`;
+    if (property) {
+      path += `.${property}`;
+    }
+    return path;
+  },
+
+  // 验证Target路径格式
+  validateTargetPath: (targetPath: string): boolean => {
+    const parsed = iotBindingAPI.parseTargetPath(targetPath);
+    return parsed !== null;
+  },
 }; 

@@ -34,6 +34,7 @@ import {
   BindingDirection
 } from '../services/iotBindingApi';
 import IoTBindingConfigModal from './IoTBindingConfigModal';
+import { AnimationManagerState } from '../types/animation';
 
 const { Title, Text } = Typography;
 
@@ -44,6 +45,9 @@ interface IoTBindingModalProps {
   bindings?: IoTBinding[];
   onClose: () => void;
   onSave: (bindings: IoTBinding[]) => void;
+  viewerRef?: React.RefObject<any>;
+  selectedModelId?: string | null;
+  animationState?: AnimationManagerState;
 }
 
 const IoTBindingModal: React.FC<IoTBindingModalProps> = ({
@@ -52,7 +56,10 @@ const IoTBindingModal: React.FC<IoTBindingModalProps> = ({
   sceneId,
   bindings = [],
   onClose,
-  onSave
+  onSave,
+  viewerRef,
+  selectedModelId,
+  animationState
 }) => {
   const [existingBindings, setExistingBindings] = useState<IoTBinding[]>([]);
   const [loading, setLoading] = useState(false);
@@ -296,6 +303,7 @@ const IoTBindingModal: React.FC<IoTBindingModalProps> = ({
         ]}
         width={1000}
         destroyOnClose
+        zIndex={1000}
       >
         <div style={{ marginBottom: 16 }}>
           <Alert
@@ -371,6 +379,9 @@ const IoTBindingModal: React.FC<IoTBindingModalProps> = ({
         editingBinding={editingBinding}
         onClose={handleConfigClose}
         onSave={handleConfigSave}
+        viewerRef={viewerRef}
+        selectedModelId={selectedModelId}
+        animationState={animationState}
       />
     </>
   );

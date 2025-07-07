@@ -113,7 +113,14 @@ class IoTBinding(BaseModel):
     # 绑定映射
     bindings: List[Dict[str, Any]] = Field(
         default=[],
-        description="绑定关系数组，格式：[{source: 'iot.path', target: 'instance.path', direction: 0}]"
+        description="""绑定关系数组，格式：[{source: 'iot.path', target: 'instance.path', direction: 0}]
+        
+        source字段格式规则：
+        - MQTT + JSON数据类型: '{订阅路径}.{json对象key层级}' (如: 'sensor/temperature.data.value')
+        - MQTT + 其他数据类型: '{订阅路径}' (如: 'sensor/temperature')
+        - WebSocket/HTTP + JSON数据类型: '{json对象key层级}' (如: 'data.value')
+        - WebSocket/HTTP + 其他数据类型: 空字符串 (直接获取数据无需解析)
+        """
     )
     
     # 节点绑定（用于骨骼动画）
@@ -158,6 +165,11 @@ class IoTBinding(BaseModel):
 # ------------------------------------------------------------------------------
 #  IoT绑定 API 模型
 # ------------------------------------------------------------------------------
+
+class IoTBindingWithInstance(IoTBinding):
+    """包含实例信息的IoT绑定配置（用于API返回）"""
+    instanceId: str = Field(description="绑定所属实例ID")
+    instanceName: Optional[str] = Field(default=None, description="绑定所属实例名称")
 
 class IoTBindingCreate(BaseModel):
     """创建IoT绑定请求模型"""

@@ -21,6 +21,7 @@ import ArrayField from './fields/ArrayField';
 import BindingField from './fields/BindingField';
 import JsonTreeField from './fields/JsonTreeField';
 import IoTBindingModal from './IoTBindingModal';
+import { AnimationManagerState } from '../types/animation';
 
 const { Panel } = Collapse;
 
@@ -57,6 +58,9 @@ export interface DynamicPropertyFormProps {
   startPickOrigin?: () => void;
   isPickingOrigin?: boolean;
   pickedOrigin?: { longitude: number; latitude: number; height: number } | null;
+  viewerRef?: React.RefObject<any>;
+  selectedModelId?: string | null;
+  animationState?: AnimationManagerState;
 }
 
 // 类型守卫函数
@@ -80,6 +84,9 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
   onUpdatePreviewImage,
   startPickOrigin,
   isPickingOrigin,
+  viewerRef,
+  selectedModelId,
+  animationState,
 }) => {
   const [form] = Form.useForm();
   const [formValues, setFormValues] = useState<any>(data || {});
@@ -495,6 +502,9 @@ const DynamicPropertyForm: React.FC<DynamicPropertyFormProps> = ({
         bindings={iotBindings}
         onClose={handleIotBindingClose}
         onSave={handleIotBindingSave}
+        viewerRef={viewerRef}
+        selectedModelId={selectedModelId}
+        animationState={animationState}
       />
     </Spin>
   );
