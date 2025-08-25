@@ -1,0 +1,74 @@
+graph LR
+  subgraph "数据来源"
+    S1["工业模型<br/>(GLTF/FBX/OBJ/…)"]
+    S2["实际采集模型<br/>倾斜摄影/点云/GIS/高斯泼溅"]
+    S3["附件<br/>(图片/文档)"]
+    S4["IoT数据<br/>(MQTT/WebSocket/HTTP)"]
+  end
+
+  subgraph "数据转换服务"
+    TM["TaskManager<br/>Redis 队列 + Mongo 持久化"]
+    P1["FileConverter"]
+    P2["WMTSProcessor"]
+    P3["ThreeDTilesProcessor"]
+  end
+
+  subgraph "数据持久化"
+    subgraph "MinIO 对象存储"
+      B1["sourece-files / converted-files / preview / attachments"]
+      B2["wmts / threedtiles"]
+    end
+    subgraph "MongoDB 文档库"
+      C1["files / public-models"]
+      C2["wmts_layers / threedtiles"]
+      C3["mqtt_sources / websocket_sources / http_sources"]
+    end
+  end
+
+  subgraph "场景序列化 (Neo4j)"
+    SG["Scene-Instance 图模型<br/>(资产引用 + 绑定)"]
+  end
+
+  subgraph "数据流送服务"
+    TILES["静态瓦片/对象分发<br/>WMTS / 3DTiles / 文件 HTTP 访问"]
+    IRT["实时数据流<br/>前端直连 MQTT/WebSocket/HTTP"]
+  end
+
+  subgraph "前端加载"
+    FE["Web 前端 / GoView"]
+  end
+
+  %% 来源 → 转换
+  S1 --> TM
+  S2 --> TM
+  S3 -->|"直传/元数据"| C1
+  S3 --> B1
+  S4 -.->|"无需转换"| IRT
+
+  %% 转换 → 持久化
+  TM --> P1
+  TM --> P2
+  TM --> P3
+  P1 -->|"输出"| B1
+  P1 -->|"更新转换信息"| C1
+  P2 -->|"解压/上传瓦片"| B2
+  P2 -->|"记录/进度"| C2
+  P3 -->|"生成瓦片/清单"| B2
+  P3 -->|"记录/进度"| C2
+
+  %% 持久化 → 场景
+  C1 -->|"资产元数据引用"| SG
+  C2 -->|"图层/tiles 引用"| SG
+
+  %% 场景 → 流送
+  SG --> TILES
+  B1 --> TILES
+  B2 --> TILES
+  C3 --> IRT
+
+  %% 流送 → 前端
+  TILES --> FE
+  IRT --> FE
+  SG -->|"场景结构/绑定"| FE
+
+
