@@ -532,8 +532,15 @@ async def validate_iot_binding(
 ):
     """验证IoT绑定配置"""
     try:
+        logger.info(f"🔍 接收到验证数据: {validation_data}")
+        logger.info(f"🔍 验证数据类型: {type(validation_data)}")
+        logger.info(f"🔍 验证数据内容: {validation_data.model_dump() if hasattr(validation_data, 'model_dump') else 'No model_dump available'}")
+        
         binding = validation_data.binding
         test_data = validation_data.testData or {}
+        
+        logger.info(f"🔍 解析的绑定对象: {binding}")
+        logger.info(f"🔍 绑定对象类型: {type(binding)}")
         
         # 执行基本验证
         validation_result = {
@@ -601,8 +608,18 @@ async def test_iot_binding(
 ):
     """测试IoT绑定配置"""
     try:
+        logger.info(f"🧪 接收到测试数据: {test_data}")
+        
         binding_data = test_data.get("binding")
         sample_data = test_data.get("sampleData", {})
+        
+        logger.info(f"🔍 解析的绑定数据: {binding_data}")
+        logger.info(f"🔍 绑定数据类型: {type(binding_data)}")
+        if binding_data:
+            logger.info(f"🔍 绑定数据字段: {binding_data.keys()}")
+            logger.info(f"🔍 protocol字段: {binding_data.get('protocol')}")
+            logger.info(f"🔍 dataType字段: {binding_data.get('dataType')}")
+            logger.info(f"🔍 sourceId字段: {binding_data.get('sourceId')}")
         
         if not binding_data:
             raise HTTPException(status_code=400, detail="缺少绑定配置")

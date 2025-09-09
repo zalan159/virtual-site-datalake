@@ -8,7 +8,17 @@ export default defineConfig(({ mode }) => {
   // 读取根目录 .env 文件
   const env = loadEnv(mode, path.resolve(__dirname, '..'));
   return {
-    plugins: [react(), cesium()],
+    plugins: [
+      react(), 
+      cesium()
+    ],
+    define: {
+      // 禁用Cesium Ion和外部资源
+      CESIUM_BASE_URL: JSON.stringify('./'),
+    },
+    optimizeDeps: {
+      include: ['cesium'],
+    },
     build: {
       emptyOutDir: false, // 不清空输出目录，保留goview子目录
       rollupOptions: {

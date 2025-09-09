@@ -1,5 +1,5 @@
 // SceneEditorStandalone.tsx
-import React, { useRef, useState, useCallback, useEffect } from 'react';
+import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { Typography,  Spin, Splitter, App as AntdApp, Button } from 'antd';
 import { useParams } from 'react-router-dom';
 import * as Cesium from 'cesium'; // 引入 Cesium 以便使用 CustomShader 等
@@ -56,14 +56,14 @@ const SceneEditorStandalone: React.FC = () => {
     height: number;
   }>>([]);
 
-  // 新增：IoT动画配置状态
-  const [iotAnimationSettings, setIoTAnimationSettings] = useState({
+  // 🔧 修复：使用useMemo稳定IoT动画配置对象，避免每次渲染都创建新对象
+  const iotAnimationSettings = useMemo(() => ({
     enableSmoothTransition: true,
     transitionDuration: 1.0,
     usePathAnimation: false,
     maxPathPoints: 10,
     clearCameraTracking: true
-  });
+  }), []); // 空依赖数组，配置不变
 
   // 获取场景数据
   const fetchSceneData = useCallback(() => {
@@ -88,10 +88,11 @@ const SceneEditorStandalone: React.FC = () => {
     height: 10000,
   };
 
-  console.log('场景编辑器中的origin:', {
-    sceneInfoOrigin: sceneInfo?.data?.origin,
-    finalOrigin: origin
-  });
+  // 🔧 临时注释：减少频繁渲染日志
+  // console.log('场景编辑器中的origin:', {
+  //   sceneInfoOrigin: sceneInfo?.data?.origin,
+  //   finalOrigin: origin
+  // });
 
   // Cesium Viewer Hook，依赖 origin
   const { viewerRef, loadingInstances, loadingProgress, loadSceneInstances } = useCesiumViewer(cesiumContainerRef, origin);
@@ -209,7 +210,7 @@ const SceneEditorStandalone: React.FC = () => {
   });
 
   // 动画状态管理 Hook
-  const { animationState, updateNodeTransform } = useCesiumAnimation(viewerRef, selectedInstanceId);
+  const { animationState, updateNodeTransform } = useCesiumAnimation(viewerRef, selectedInstanceId, isPreviewMode);
 
   // Selected Model State
   const [selectedModelInfo, setSelectedModelInfo] = useState<SelectedModelInfo | null>(null);
@@ -373,7 +374,7 @@ const SceneEditorStandalone: React.FC = () => {
   } = usePreviewMode({
     enabled: isPreviewMode,
     sceneId: sceneId || undefined, // 传递sceneId，处理null类型
-    instanceId: selectedInstanceId || undefined, // 传递当前选中的实例ID，处理null类型
+    instanceId: undefined, // 🔧 修复：不传递selectedInstanceId避免循环依赖
     viewerRef,
     // IoT动画配置
     iotAnimationConfig: iotAnimationSettings,
@@ -386,74 +387,89 @@ const SceneEditorStandalone: React.FC = () => {
     onInstanceUpdate: (instanceId, property, value) => {
       console.log('接收到实例更新:', { instanceId, property, value });
       
-      // 🆕 确保selectedInstanceId被正确设置，以便动画系统能够工作
-      if (instanceId !== 'scene' && instanceId !== selectedInstanceId) {
-        console.log('🔄 设置selectedInstanceId为当前更新的实例:', { 
-          oldSelectedInstanceId: selectedInstanceId, 
-          newSelectedInstanceId: instanceId 
-        });
-        setSelectedInstanceId(instanceId);
-      }
+      // 🔧 修复：注释掉自动设置selectedInstanceId，避免循环依赖导致连接池重建
+      // if (instanceId !== 'scene' && instanceId !== selectedInstanceId) {
+      //   console.log('🔄 设置selectedInstanceId为当前更新的实例:', { 
+      //     oldSelectedInstanceId: selectedInstanceId, 
+      //     newSelectedInstanceId: instanceId 
+      //   });
+      //   setSelectedInstanceId(instanceId);
+      // }
       
-      // 更新Cesium中的3D模型实例
-      if (viewerRef.current && viewerRef.current.scene) {
-        const primitives = viewerRef.current.scene.primitives;
+      // 性能优化：使用缓存查找primitive
+      if (viewerRef.current?.scene?.primitives) {
+        // 如果缓存为空或过期，更新缓存
+        if (primitiveCache.current.size === 0) {
+          updatePrimitiveCache();
+        }
         
         // 处理场景级绑定 - 更新所有实例
         if (instanceId === 'scene') {
-          console.log('场景级绑定，更新所有模型实例');
-          
-          // 对所有实例应用更新
-          for (let i = 0; i < primitives.length; i++) {
-            const primitive = primitives.get(i);
-            
-            // 检查是否是模型实例
-            if (primitive && (primitive.id || (primitive as any).instanceId)) {
-              const primitiveInstanceId = primitive.id || (primitive as any).instanceId;
-              console.log('找到模型实例，正在更新属性:', { 
-                primitiveId: primitiveInstanceId, 
-                property, 
-                value, 
-                primitive 
-              });
-              
-              // 🆕 应用属性更新，使用primitive的实例ID
-              applyPropertyUpdate(primitive, property, value, primitiveInstanceId);
-            }
+          // 对缓存中的所有实例应用更新
+          for (const [primitiveId, primitive] of primitiveCache.current) {
+            applyPropertyUpdate(primitive, property, value, primitiveId);
           }
           return; // 场景级绑定处理完毕，提前返回
         }
         
-        // 处理特定实例的绑定
-        for (let i = 0; i < primitives.length; i++) {
-          const primitive = primitives.get(i);
+        // 处理特定实例的绑定 - 直接从缓存查找
+        const primitive = primitiveCache.current.get(instanceId);
+        if (primitive) {
+          // 节流：限制更新频率避免渲染卡顿
+          const now = Date.now();
+          const lastUpdate = lastUpdateTime.current.get(instanceId) || 0;
           
-          // 检查是否是目标模型实例
-          if (primitive.id === instanceId || (primitive as any).instanceId === instanceId) {
-            console.log('找到模型实例，正在更新属性:', { instanceId, property, value, primitive });
-            
-            // 🆕 应用属性更新，传入实例ID
+          // 限制每个实例更新频率不超过30fps (33ms间隔)
+          if (now - lastUpdate >= 33) {
             applyPropertyUpdate(primitive, property, value, instanceId);
-            break; // 找到目标实例后停止循环
+            lastUpdateTime.current.set(instanceId, now);
+          }
+        } else {
+          // 如果缓存中找不到，可能是新添加的实例，更新缓存后重试
+          updatePrimitiveCache();
+          const retryPrimitive = primitiveCache.current.get(instanceId);
+          if (retryPrimitive) {
+            applyPropertyUpdate(retryPrimitive, property, value, instanceId);
           }
         }
       }
     }
   });
 
-  // 抽取的属性更新函数
+  // 性能优化：缓存实例ID到primitive的映射
+  const primitiveCache = useRef<Map<string, any>>(new Map());
+  const lastUpdateTime = useRef<Map<string, number>>(new Map());
+  
+  // 更新缓存
+  const updatePrimitiveCache = useCallback(() => {
+    if (!viewerRef.current?.scene?.primitives) return;
+    
+    primitiveCache.current.clear();
+    const primitives = viewerRef.current.scene.primitives;
+    
+    for (let i = 0; i < primitives.length; i++) {
+      const primitive = primitives.get(i);
+      if (primitive && (primitive.id || (primitive as any).instanceId)) {
+        const primitiveInstanceId = primitive.id || (primitive as any).instanceId;
+        primitiveCache.current.set(primitiveInstanceId, primitive);
+      }
+    }
+  }, []);
+
+  // 抽取的属性更新函数 - 性能优化版本
   const applyPropertyUpdate = (primitive: any, property: string, value: any, targetInstanceId: string) => {
     try {
       // 处理不同类型的属性更新
       switch (property) {
         case 'instance.transform.location':
-          // 实例变换位置 - 目标绝对ENU坐标 (East-North-Up)
+        case 'instance.instance.transform.location':
+          // 实例变换位置 - MQTT数据作为基于场景原点的ENU绝对坐标 (East-North-Up)
           if (Array.isArray(value) && value.length >= 3) {
             const [east, north, up] = value;
             
             if (primitive.modelMatrix) {
-              // 使用平滑动画过渡设置目标位置
-              updateModelPositionSmooth(primitive, east, north, up);
+              // 使用平滑动画过渡设置绝对ENU坐标位置
+              updateModelPositionSmoothAbsolute(primitive, east, north, up);
             }
           } else if (typeof value === 'object' && value !== null) {
             // 如果是对象格式的ENU位置 {x, y, z} 或 {east, north, up}
@@ -470,7 +486,8 @@ const SceneEditorStandalone: React.FC = () => {
             
             if (east !== undefined && north !== undefined) {
               if (primitive.modelMatrix) {
-                updateModelPositionSmooth(primitive, east, north, up);
+                // 使用绝对ENU坐标平滑更新
+                updateModelPositionSmoothAbsolute(primitive, east, north, up);
               }
             }
           }
@@ -673,32 +690,90 @@ const SceneEditorStandalone: React.FC = () => {
   const updateModelPositionDirect = useCallback((primitive: any, east: number, north: number, up: number) => {
     if (!primitive.modelMatrix) return;
     
+    // 性能优化：注释掉频繁的调试日志
+    // console.log('🔍 [MQTT位置更新] updateModelPositionDirect 开始');
+    // console.log('📍 [输入参数]', { east, north, up });
+    // console.log('🗺️ [场景原点]', origin);
+    
     try {
       // 获取当前模型矩阵的缩放（保持不变）
       const currentMatrix = primitive.modelMatrix.clone();
+      const currentTranslation = Cesium.Matrix4.getTranslation(currentMatrix, new Cesium.Cartesian3());
       const scale = Cesium.Matrix4.getScale(currentMatrix, new Cesium.Cartesian3());
+      
+      // console.log('🎯 [当前模型状态]', { currentWorldPosition: currentTranslation, scale: scale });
+      
+      // 🔧 关键修复：将MQTT数据处理为相对于原始位置的绝对坐标
+      let finalEast = east;
+      let finalNorth = north; 
+      let finalUp = up;
+      
+      if (primitive.originalTransform) {
+        // console.log('📋 [模型原始Transform]', primitive.originalTransform);
+        
+        // 选项1：使用原始位置 + MQTT数据作为偏移量
+        // finalEast = primitive.originalTransform.location[0] + east;
+        // finalNorth = primitive.originalTransform.location[1] + north;
+        // finalUp = primitive.originalTransform.location[2] + up;
+        
+        // 选项2：直接使用MQTT数据作为绝对坐标（当前方式）
+        finalEast = east;
+        finalNorth = north;
+        finalUp = up;
+        
+        // 坐标处理日志已注释以提升性能
+      } else {
+        console.warn('❌ 缺少原始Transform数据，直接使用MQTT数据');
+      }
       
       // 🔧 关键修复：正确处理ENU坐标系方向
       // 1. 确保有场景原点信息
       if (!origin) {
-        console.warn('缺少场景原点信息，无法正确处理ENU坐标');
+        console.warn('❌ 缺少场景原点信息，无法正确处理ENU坐标');
         return;
       }
       
-      // 2. 创建场景原点的ENU变换矩阵
+      // 2. 创建场景原点的笛卡尔坐标
       const originCartesian = Cesium.Cartesian3.fromDegrees(
         origin.longitude, 
         origin.latitude, 
         origin.height || 0
       );
+      console.log('🌍 [场景原点世界坐标]', originCartesian);
+      
+      // 3. 创建东北上矩阵（局部坐标系）
       const enuMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(originCartesian);
+      console.log('📐 [ENU变换矩阵已创建]');
       
-      // 3. 创建目标ENU局部坐标（这是绝对位置，不是偏移量）
-      const targetLocalPosition = new Cesium.Cartesian3(east, north, up);
+      // 4. 创建局部位置向量（注意：这里是相对于场景原点的偏移量）
+      const localPosition = new Cesium.Cartesian3(
+        finalEast,  // 东向偏移
+        finalNorth, // 北向偏移
+        finalUp     // 上向偏移
+      );
+      console.log('📏 [局部ENU偏移]', localPosition);
       
-      // 4. 将目标ENU坐标转换为世界坐标
-      const targetWorldPosition = new Cesium.Cartesian3();
-      Cesium.Matrix4.multiplyByPoint(enuMatrix, targetLocalPosition, targetWorldPosition);
+      // 5. 将局部位置转换为世界坐标
+      const targetWorldPosition = Cesium.Matrix4.multiplyByPoint(
+        enuMatrix, 
+        localPosition, 
+        new Cesium.Cartesian3()
+      );
+      console.log('🎯 [目标世界坐标]', targetWorldPosition);
+      
+      // 6. 计算从原点到目标的距离
+      const distanceFromOrigin = Cesium.Cartesian3.distance(originCartesian, targetWorldPosition);
+      console.log('📐 [距离场景原点]', distanceFromOrigin + ' 米');
+      
+      // 🔧 调试：计算ENU偏移的实际距离
+      const enuDistance = Math.sqrt(finalEast*finalEast + finalNorth*finalNorth + finalUp*finalUp);
+      console.log('📏 [ENU偏移距离]', enuDistance + ' 米');
+      
+      // 🔧 调试：测试原点位置
+      const testOriginPosition = new Cesium.Cartesian3(0, 0, 0);
+      const testOriginWorld = Cesium.Matrix4.multiplyByPoint(enuMatrix, testOriginPosition, new Cesium.Cartesian3());
+      const testOriginDistance = Cesium.Cartesian3.distance(originCartesian, testOriginWorld);
+      console.log('🧪 [测试原点(0,0,0)距离]', testOriginDistance + ' 米');
       
       // 5. 构建新的模型矩阵（与模型加载时完全一致的方式）
       let newMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(targetWorldPosition);
@@ -728,7 +803,7 @@ const SceneEditorStandalone: React.FC = () => {
       Cesium.Matrix4.multiplyByScale(newMatrix, scale, newMatrix);
       
       primitive.modelMatrix = newMatrix;
-      console.log('已直接更新模型位置 (绝对ENU坐标，修复方向):', { 
+      console.log('已直接更新模型位置 (相对场景原点的ENU偏移):', { 
         targetENU: { east, north, up },
         targetWorld: targetWorldPosition,
         hasOriginalRotation: !!primitive.originalRotation
@@ -743,6 +818,9 @@ const SceneEditorStandalone: React.FC = () => {
   const updateModelPositionSmooth = useCallback((primitive: any, east: number, north: number, up: number) => {
     if (!primitive.modelMatrix) return;
     
+    // 减少调试日志输出以提升性能
+    // console.log('🔍 [MQTT平滑更新] updateModelPositionSmooth 开始');
+    
     // 使用当前的动画配置
     const animationConfig = iotAnimationSettings;
     
@@ -755,33 +833,87 @@ const SceneEditorStandalone: React.FC = () => {
      try {
        // 获取当前模型矩阵的缩放（保持不变）
        const currentMatrix = primitive.modelMatrix.clone();
+       const currentTranslation = Cesium.Matrix4.getTranslation(currentMatrix, new Cesium.Cartesian3());
        const scale = Cesium.Matrix4.getScale(currentMatrix, new Cesium.Cartesian3());
        
-       // 获取当前世界位置（用于动画起点）
-       const currentTranslation = Cesium.Matrix4.getTranslation(currentMatrix, new Cesium.Cartesian3());
+       // 🔧 关键修复：将MQTT数据处理为相对于原始位置的绝对坐标
+       let finalEast = east;
+       let finalNorth = north; 
+       let finalUp = up;
+       
+       if (primitive.originalTransform) {
+         // 直接使用MQTT数据作为绝对坐标
+         finalEast = east;
+         finalNorth = north;
+         finalUp = up;
+       }
        
        // 🔧 修复：将IoT数据作为目标绝对ENU坐标处理
        // 1. 确保有场景原点信息
        if (!origin) {
-         console.warn('缺少场景原点信息，无法正确处理ENU坐标');
+         console.warn('❌ 缺少场景原点信息，无法正确处理ENU坐标');
          updateModelPositionDirect(primitive, east, north, up);
          return;
        }
        
-       // 2. 创建场景原点的ENU变换矩阵
-       const originCartesian = Cesium.Cartesian3.fromDegrees(
-         origin.longitude, 
-         origin.latitude, 
-         origin.height || 0
+       // 🔧 正确的做法：基于当前位置进行相对变换
+       // 1. 获取当前模型的世界坐标
+       const currentWorldPosition = currentTranslation;
+       console.log('📍 [当前世界坐标]', currentWorldPosition);
+       
+       // 2. 创建基于当前位置的ENU变换矩阵
+       const enuMatrixAtCurrent = Cesium.Transforms.eastNorthUpToFixedFrame(currentWorldPosition);
+       console.log('📐 [基于当前位置的ENU变换矩阵已创建]');
+       
+       // 3. 计算从原始位置到目标位置的ENU偏移
+       let deltaEast, deltaNorth, deltaUp;
+       if (primitive.originalTransform) {
+         deltaEast = finalEast - primitive.originalTransform.location[0];
+         deltaNorth = finalNorth - primitive.originalTransform.location[1];
+         deltaUp = finalUp - primitive.originalTransform.location[2];
+       } else {
+         // 如果没有原始数据，假设当前位置就是原始位置
+         deltaEast = 0;
+         deltaNorth = 0;
+         deltaUp = 0;
+       }
+       
+       console.log('🔄 [ENU变化量]', { deltaEast, deltaNorth, deltaUp });
+       
+       // 4. 创建相对偏移向量
+       const relativeOffset = new Cesium.Cartesian3(deltaEast, deltaNorth, deltaUp);
+       console.log('📏 [相对偏移向量]', relativeOffset);
+       
+       // 5. 将相对偏移转换为世界坐标偏移
+       const worldOffset = Cesium.Matrix4.multiplyByPointAsVector(
+         enuMatrixAtCurrent,
+         relativeOffset,
+         new Cesium.Cartesian3()
        );
-       const enuMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(originCartesian);
+       console.log('🌐 [世界坐标偏移]', worldOffset);
        
-       // 3. 创建目标ENU局部坐标（这是绝对位置，不是偏移量）
-       const targetLocalPosition = new Cesium.Cartesian3(east, north, up);
+       // 6. 计算目标世界坐标 = 当前位置 + 世界偏移
+       const targetWorldPosition = Cesium.Cartesian3.add(
+         currentWorldPosition,
+         worldOffset,
+         new Cesium.Cartesian3()
+       );
+       console.log('🎯 [目标世界坐标]', targetWorldPosition);
        
-       // 4. 将目标ENU坐标转换为世界坐标
-       const targetWorldPosition = new Cesium.Cartesian3();
-       Cesium.Matrix4.multiplyByPoint(enuMatrix, targetLocalPosition, targetWorldPosition);
+       
+       // 🔧 调试：计算实际移动距离（相对于当前位置）
+       const actualMoveDistance = Cesium.Cartesian3.distance(currentTranslation, targetWorldPosition);
+       console.log('🚀 [实际移动距离]', actualMoveDistance + ' 米');
+       
+       // 🔧 调试：计算ENU偏移的理论距离
+       if (primitive.originalTransform) {
+         const theoreticalDistance = Math.sqrt(
+           Math.pow(finalEast - primitive.originalTransform.location[0], 2) +
+           Math.pow(finalNorth - primitive.originalTransform.location[1], 2) + 
+           Math.pow(finalUp - primitive.originalTransform.location[2], 2)
+         );
+         console.log('📊 [理论移动距离]', theoreticalDistance + ' 米');
+       }
        
        // 使用Cesium的插值动画
        if (viewerRef.current) {
@@ -863,7 +995,7 @@ const SceneEditorStandalone: React.FC = () => {
             primitive.modelMatrix = newMatrix;
             viewer.scene.requestRender();
             
-            console.log('已平滑更新模型位置 (绝对ENU坐标，修复方向):', { 
+            console.log('已平滑更新模型位置 (相对场景原点的ENU偏移):', { 
               targetENU: { east, north, up },
               targetWorld: targetWorldPosition,
               hasOriginalRotation: !!primitive.originalRotation
@@ -1238,6 +1370,178 @@ const SceneEditorStandalone: React.FC = () => {
       updateModelScaleDirect(primitive, translation, targetScale);
     }
   }, [viewerRef, iotAnimationSettings, updateModelScaleDirect]);
+
+  // 🆕 绝对ENU坐标更新函数
+  
+  /**
+   * 🆕 使用MQTT数据作为基于场景原点的绝对ENU坐标直接更新模型位置
+   * @param primitive 模型原语
+   * @param east 东向绝对坐标
+   * @param north 北向绝对坐标  
+   * @param up 上向绝对坐标
+   */
+  const updateModelPositionDirectAbsolute = useCallback((primitive: any, east: number, north: number, up: number) => {
+    try {
+      // 1. 确保有场景原点信息
+      if (!origin) {
+        console.warn('❌ 缺少场景原点信息，无法处理ENU绝对坐标');
+        return;
+      }
+
+      // 2. 创建场景原点的笛卡尔坐标（与场景初始化时相同）
+      const originCartesian = Cesium.Cartesian3.fromDegrees(
+        origin.longitude, 
+        origin.latitude, 
+        origin.height || 0
+      );
+      
+      // 3. 创建ENU变换矩阵（与场景初始化时相同）
+      const enuMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(originCartesian);
+      
+      // 4. 创建绝对ENU位置向量
+      const absoluteEnuPosition = new Cesium.Cartesian3(east, north, up);
+      
+      // 5. 转换为世界坐标（与场景初始化时相同的计算方式）
+      const worldPosition = Cesium.Matrix4.multiplyByPoint(
+        enuMatrix, 
+        absoluteEnuPosition, 
+        new Cesium.Cartesian3()
+      );
+
+      // 6. 创建新的模型矩阵
+      let newMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(worldPosition);
+      
+      // 7. 保持原有的旋转和缩放
+      const currentMatrix = primitive.modelMatrix.clone();
+      const currentScale = Cesium.Matrix4.getScale(currentMatrix, new Cesium.Cartesian3());
+      
+      // 应用缩放
+      Cesium.Matrix4.multiplyByScale(newMatrix, currentScale, newMatrix);
+      
+      // 如果有原始旋转，应用旋转
+      if (primitive.originalRotation) {
+        const hpr = new Cesium.HeadingPitchRoll(
+          primitive.originalRotation.heading || 0,
+          primitive.originalRotation.pitch || 0,
+          primitive.originalRotation.roll || 0
+        );
+        const rotationMatrix = Cesium.Matrix3.fromHeadingPitchRoll(hpr);
+        Cesium.Matrix4.multiplyByMatrix3(newMatrix, rotationMatrix, newMatrix);
+      }
+      
+      // 8. 更新模型矩阵
+      primitive.modelMatrix = newMatrix;
+      
+      console.log('📍 [绝对ENU坐标更新]', {
+        inputENU: { east, north, up },
+        originCartesian,
+        worldPosition,
+        sceneOrigin: origin
+      });
+      
+    } catch (error) {
+      console.error('绝对ENU坐标更新失败:', error);
+    }
+  }, [origin]);
+
+  /**
+   * 🆕 使用MQTT数据作为基于场景原点的绝对ENU坐标平滑更新模型位置
+   * @param primitive 模型原语
+   * @param east 东向绝对坐标
+   * @param north 北向绝对坐标
+   * @param up 上向绝对坐标
+   */
+  const updateModelPositionSmoothAbsolute = useCallback((primitive: any, east: number, north: number, up: number) => {
+    if (!viewerRef.current) {
+      updateModelPositionDirectAbsolute(primitive, east, north, up);
+      return;
+    }
+
+    try {
+      // 1. 确保有场景原点信息
+      if (!origin) {
+        console.warn('❌ 缺少场景原点信息，无法处理ENU绝对坐标');
+        return;
+      }
+
+      // 2. 创建场景原点的笛卡尔坐标（与场景初始化时相同）
+      const originCartesian = Cesium.Cartesian3.fromDegrees(
+        origin.longitude, 
+        origin.latitude, 
+        origin.height || 0
+      );
+      
+      // 3. 创建ENU变换矩阵（与场景初始化时相同）
+      const enuMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(originCartesian);
+      
+      // 4. 创建绝对ENU位置向量
+      const absoluteEnuPosition = new Cesium.Cartesian3(east, north, up);
+      
+      // 5. 转换为目标世界坐标（与场景初始化时相同的计算方式）
+      const targetWorldPosition = Cesium.Matrix4.multiplyByPoint(
+        enuMatrix, 
+        absoluteEnuPosition, 
+        new Cesium.Cartesian3()
+      );
+
+      // 6. 获取当前位置
+      const currentMatrix = primitive.modelMatrix.clone();
+      const currentTranslation = Cesium.Matrix4.getTranslation(currentMatrix, new Cesium.Cartesian3());
+      const currentScale = Cesium.Matrix4.getScale(currentMatrix, new Cesium.Cartesian3());
+
+      // 7. 启动平滑动画
+      const startTime = Date.now();
+      const duration = iotAnimationSettings.transitionDuration * 1000; // 转换为毫秒
+
+      const animate = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // 使用线性插值计算当前位置
+        const currentPosition = Cesium.Cartesian3.lerp(
+          currentTranslation,
+          targetWorldPosition,
+          progress,
+          new Cesium.Cartesian3()
+        );
+
+        // 创建新的模型矩阵
+        let newMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(currentPosition);
+        
+        // 保持缩放
+        Cesium.Matrix4.multiplyByScale(newMatrix, currentScale, newMatrix);
+        
+        // 保持旋转
+        if (primitive.originalRotation) {
+          const hpr = new Cesium.HeadingPitchRoll(
+            primitive.originalRotation.heading || 0,
+            primitive.originalRotation.pitch || 0,
+            primitive.originalRotation.roll || 0
+          );
+          const rotationMatrix = Cesium.Matrix3.fromHeadingPitchRoll(hpr);
+          Cesium.Matrix4.multiplyByMatrix3(newMatrix, rotationMatrix, newMatrix);
+        }
+        
+        primitive.modelMatrix = newMatrix;
+
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          console.log('✅ [绝对ENU坐标平滑更新完成]', {
+            inputENU: { east, north, up },
+            finalWorldPosition: targetWorldPosition,
+            sceneOrigin: origin
+          });
+        }
+      };
+
+      requestAnimationFrame(animate);
+
+    } catch (error) {
+      console.error('绝对ENU坐标平滑更新失败:', error);
+      updateModelPositionDirectAbsolute(primitive, east, north, up);
+    }
+  }, [viewerRef, origin, iotAnimationSettings, updateModelPositionDirectAbsolute]);
 
   // 🆕 模型状态检查辅助函数
   
@@ -2244,6 +2548,6 @@ const SceneEditorStandalone: React.FC = () => {
       )}
     </div>
   );
-  };
+};
   
-  export default SceneEditorStandalone;
+export default SceneEditorStandalone;

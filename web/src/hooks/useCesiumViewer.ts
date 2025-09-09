@@ -8,7 +8,7 @@ import { downloadPublicModel } from '../services/publicModels'; // 导入公共�
 import api from '../services/axiosConfig';
 
 // 确保 Cesium 全局 Token 设置 (如果需要)
-// Cesium.Ion.defaultAccessToken = 'YOUR_CESIUM_ION_TOKEN';
+Cesium.Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_ION_TOKEN;
 
 // 实例接口定义
 interface SceneInstance {
@@ -54,13 +54,18 @@ export const useCesiumViewer = (
         selectionIndicator: true,
         contextOptions: {
             webgl: {
-              preserveDrawingBuffer: true
+              preserveDrawingBuffer: true,
+              alpha: true
             }
           }
       });
 
       // 移除默认影像图层
       viewer.imageryLayers.removeAll();
+      
+      // 设置地球背景为透明
+      viewer.scene.globe.show = false;
+      viewer.scene.backgroundColor = Cesium.Color.TRANSPARENT;
 
       viewerRef.current = viewer;
     }
@@ -360,6 +365,14 @@ export const useCesiumViewer = (
           (model as any).id = instance.uid;
           (model as any).name = instance.name;
           (model as any).instanceId = instance.uid;
+          
+          // 🔧 保存原始Transform数据（用于IoT更新时参考）
+          (model as any).originalTransform = {
+            location: [...location],
+            rotation: [...rotation],
+            scale: [...scale]
+          };
+          console.log(`保存原始Transform数据 [${instance.name}]:`, (model as any).originalTransform);
           
           // 🔧 保存原始旋转数据（用于IoT更新时保持正确的方向）
           if (rotation && rotation.length === 3) {

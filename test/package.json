@@ -1,16 +1,21 @@
 {
-  "name": "websocket-test-server",
+  "name": "virtualsite-mqtt-test",
   "version": "1.0.0",
-  "description": "WebSocket测试服务器 - 用于VirtualSite项目测试",
-  "main": "websocket_test_server.js",
+  "description": "MQTT WebSocket client test for VirtualSite",
+  "main": "test-mqtt-ws.js",
   "scripts": {
-    "start": "node websocket_test_server.js",
-    "dev": "node websocket_test_server.js"
+    "test:mqtt": "node test-mqtt-ws.js",
+    "test:mqtt-verbose": "DEBUG=mqtt* node test-mqtt-ws.js"
   },
   "dependencies": {
-    "ws": "^8.14.2"
+    "mqtt": "^5.14.1"
   },
-  "keywords": ["websocket", "test", "server", "echo"],
+  "keywords": [
+    "mqtt",
+    "websocket",
+    "test",
+    "emqx"
+  ],
   "author": "VirtualSite",
   "license": "MIT"
-} 
+}

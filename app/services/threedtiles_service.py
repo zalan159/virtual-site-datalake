@@ -350,8 +350,9 @@ class ThreeDTilesService:
             for root, dirs, files in os.walk(extract_dir):
                 for file in files:
                     file_path = os.path.join(root, file)
-                    # 确保使用tile_id作为目录前缀
-                    object_name = f"{tile_id}/{os.path.relpath(file_path, extract_dir)}"
+                    # 确保使用tile_id作为目录前缀，并将Windows路径分隔符转换为正斜杠
+                    relative_path = os.path.relpath(file_path, extract_dir).replace('\\', '/')
+                    object_name = f"{tile_id}/{relative_path}"
                     
                     # 上传文件到MinIO
                     minio_client.fput_object(
@@ -458,8 +459,9 @@ class ThreeDTilesService:
             for root, dirs, files in os.walk(extract_dir):
                 for file in files:
                     file_path = os.path.join(root, file)
-                    # 确保使用tile_id作为目录前缀，而不是原始的object_id
-                    object_name = f"{tile_id}/{os.path.relpath(file_path, extract_dir)}"
+                    # 确保使用tile_id作为目录前缀，而不是原始的object_id，并将Windows路径分隔符转换为正斜杠
+                    relative_path = os.path.relpath(file_path, extract_dir).replace('\\', '/')
+                    object_name = f"{tile_id}/{relative_path}"
                     
                     # 上传文件到MinIO
                     try:
@@ -596,7 +598,9 @@ class ThreeDTilesService:
             for root, dirs, files in os.walk(extract_dir):
                 for file in files:
                     file_path = os.path.join(root, file)
-                    object_name = f"{tile_id}/{os.path.relpath(file_path, extract_dir)}"
+                    # 将Windows路径分隔符转换为正斜杠
+                    relative_path = os.path.relpath(file_path, extract_dir).replace('\\', '/')
+                    object_name = f"{tile_id}/{relative_path}"
                     
                     # 流式上传文件到MinIO
                     try:

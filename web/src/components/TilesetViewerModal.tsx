@@ -28,7 +28,16 @@ const TilesetViewer: React.FC<TilesetViewerProps> = ({
         sceneModePicker: false,
         geocoder: false,
         infoBox: false,
+        contextOptions: {
+          webgl: {
+            alpha: true
+          }
+        }
       });
+
+      // 设置地球背景为透明
+      viewerRef.current.scene.globe.show = false;
+      viewerRef.current.scene.backgroundColor = Cesium.Color.TRANSPARENT;
 
       // 加载3DTiles
       if (tileset_url) {

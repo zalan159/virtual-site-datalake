@@ -593,6 +593,18 @@ const IoTBindingConfigModal: React.FC<IoTBindingConfigModalProps> = ({
       // 调试：打印表单值
       console.log('📋 表单值:', values);
       
+      // 验证必填字段
+      const missingFields = [];
+      if (!values.protocol) missingFields.push('协议类型');
+      if (!values.dataType) missingFields.push('数据类型');
+      if (!values.sourceId) missingFields.push('连接配置');
+      
+      if (missingFields.length > 0) {
+        message.error(`请完成以下必填项：${missingFields.join('、')}`);
+        setTestLoading(false);
+        return;
+      }
+      
       const binding: IoTBinding = {
         id: editingBinding?.id || `binding_${Date.now()}`,
         ...values
@@ -622,6 +634,11 @@ const IoTBindingConfigModal: React.FC<IoTBindingConfigModalProps> = ({
       // 调试：打印发送的验证数据
       const validationData = { binding: fixedBinding };
       console.log('📤 发送的验证数据:', validationData);
+      console.log('🔍 验证时fixedBinding对象详细信息:');
+      console.log('  - protocol:', fixedBinding.protocol);
+      console.log('  - dataType:', fixedBinding.dataType);
+      console.log('  - sourceId:', fixedBinding.sourceId);
+      console.log('  - 完整对象:', JSON.stringify(fixedBinding, null, 2));
 
       const response = await iotBindingAPI.validateBinding(validationData);
       setValidationResult(response.data);
@@ -659,6 +676,18 @@ const IoTBindingConfigModal: React.FC<IoTBindingConfigModalProps> = ({
       setTestLoading(true);
       const values = await form.validateFields();
       
+      // 验证必填字段
+      const missingFields = [];
+      if (!values.protocol) missingFields.push('协议类型');
+      if (!values.dataType) missingFields.push('数据类型');
+      if (!values.sourceId) missingFields.push('连接配置');
+      
+      if (missingFields.length > 0) {
+        message.error(`请完成以下必填项：${missingFields.join('、')}`);
+        setTestLoading(false);
+        return;
+      }
+      
       // 修复数据结构：确保符合后端期望
       const fixedBinding: IoTBinding = {
         id: editingBinding?.id || `binding_${Date.now()}`,
@@ -681,6 +710,11 @@ const IoTBindingConfigModal: React.FC<IoTBindingConfigModalProps> = ({
       };
 
       console.log('🧪 测试绑定数据:', { binding: fixedBinding, sampleData });
+      console.log('🔍 fixedBinding对象详细信息:');
+      console.log('  - protocol:', fixedBinding.protocol);
+      console.log('  - dataType:', fixedBinding.dataType);
+      console.log('  - sourceId:', fixedBinding.sourceId);
+      console.log('  - 完整对象:', JSON.stringify(fixedBinding, null, 2));
 
       const response = await iotBindingAPI.testBinding({ binding: fixedBinding, sampleData });
       

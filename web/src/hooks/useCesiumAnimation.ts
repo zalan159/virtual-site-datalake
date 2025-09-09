@@ -16,7 +16,8 @@ import { animationEventService } from '../services/animationEventService';
 
 export const useCesiumAnimation = (
   viewerRef: React.RefObject<Cesium.Viewer | null>,
-  selectedModelId: string | null
+  selectedModelId: string | null,
+  isPreviewMode?: boolean
 ) => {
   // 辅助方法：扁平化节点树
   const flattenNodeTree = (node: BoneNode): BoneNode[] => {
@@ -1179,8 +1180,15 @@ export const useCesiumAnimation = (
   useEffect(() => {
     console.log('🔄 useCesiumAnimation useEffect 触发:', { 
       selectedModelId, 
-      hasSelectedModelId: !!selectedModelId 
+      hasSelectedModelId: !!selectedModelId,
+      isPreviewMode
     });
+    
+    // 🔧 在预览模式下不加载动画，避免与IoT数据更新冲突
+    if (isPreviewMode) {
+      console.log('⏸️ 预览模式活跃，跳过动画加载');
+      return;
+    }
     
     if (selectedModelId) {
       console.log('🚀 开始加载模型动画:', selectedModelId);
@@ -1188,7 +1196,7 @@ export const useCesiumAnimation = (
     } else {
       console.log('⚠️ selectedModelId 为空，不加载动画');
     }
-  }, [selectedModelId, loadModelAnimations]);
+  }, [selectedModelId, loadModelAnimations, isPreviewMode]);
 
   // 设置动画事件监听器
   useEffect(() => {

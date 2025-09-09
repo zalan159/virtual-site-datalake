@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { animationEventService } from '../services/animationEventService';
 import { iotAnimationService } from '../services/iotAnimationService';
 import { AnimationEvent } from '../types/animation';
@@ -62,9 +62,39 @@ export const usePreviewMode = (options: PreviewModeOptions) => {
     connections: new Map(),
     bindingGroups: new Map()
   });
+  
+  // 🔧 防止React Strict Mode双重渲染导致的重复连接
+  const connectingSourcesRef = useRef<Set<string>>(new Set());
+  const connectedSourcesRef = useRef<Set<string>>(new Set());
   const [poolStatus, setPoolStatus] = useState<{[key: string]: boolean}>({});
   
+  // 消息频率监控
+  const messageCounterRef = useRef<Map<string, { count: number; lastReset: number }>>(new Map());
+  
+  // 连接稳定性监控
+  const connectionStabilityRef = useRef<Map<string, { 
+    connectTime: number; 
+    disconnectCount: number; 
+    lastDisconnect: number;
+  }>>(new Map());
+  
+  // 🔧 修复stale closure：使用ref存储回调避免闭包陈旧
+  const callbacksRef = useRef<{
+    onInstanceUpdate?: (instanceId: string, property: string, value: any) => void;
+    onIoTDataUpdate?: (data: any) => void;
+  }>({});
+  
+  // 🔧 控制变量测试：简化消息计数器
+  const testMessageCountRef = useRef(0);
+  const testStartTimeRef = useRef(Date.now());
+  
   const httpRequestHook = useHTTPRequest();
+
+  // 🔧 保持回调引用最新
+  useEffect(() => {
+    callbacksRef.current.onInstanceUpdate = onInstanceUpdate;
+    callbacksRef.current.onIoTDataUpdate = onIoTDataUpdate;
+  }, [onInstanceUpdate, onIoTDataUpdate]);
 
   // ====================  原有数据处理逻辑 ====================
   
@@ -72,8 +102,29 @@ export const usePreviewMode = (options: PreviewModeOptions) => {
    * 根据绑定规则处理IoT数据并更新实例
    */
   const processIoTDataAndUpdateInstance = useCallback(async (binding: IoTBinding | IoTBindingWithInstance, rawData: any, topic?: string) => {
+    const processStartTime = Date.now();
+    
+    // 🔧 控制变量测试：简化消息统计
+    testMessageCountRef.current++;
+    const elapsed = (processStartTime - testStartTimeRef.current) / 1000;
+    const avgFreq = testMessageCountRef.current / elapsed;
+    
+    console.log(`🧪 [简化测试] 消息 #${testMessageCountRef.current}`, {
+      elapsed: `${elapsed.toFixed(1)}s`,
+      avgFreq: `${avgFreq.toFixed(2)} msg/s`,
+      topic,
+      timestamp: new Date(processStartTime).toISOString()
+    });
+    
     try {
-      debugLog('PROCESS_DATA', `开始处理IoT数据`, { bindingId: binding.id, protocol: binding.protocol, dataType: binding.dataType, topic });
+      debugLog('PROCESS_DATA', `开始处理IoT数据`, { 
+        bindingId: binding.id, 
+        protocol: binding.protocol, 
+        dataType: binding.dataType, 
+        topic,
+        processStartTime,
+        timestamp: new Date(processStartTime).toISOString()
+      });
       
       // 获取绑定的实例ID
       const bindingInstanceId = 'instanceId' in binding ? binding.instanceId : instanceId;
@@ -121,12 +172,22 @@ export const usePreviewMode = (options: PreviewModeOptions) => {
                 mappedValue = outputMin + normalizedValue * (outputMax - outputMin);
               }
               
-              // 更新实例属性
+              // 🔧 恢复Cesium更新
+              const updateStartTime = Date.now();
               if (bindingInstanceId) {
-                onInstanceUpdate?.(bindingInstanceId, bindingRule.target, mappedValue);
+                callbacksRef.current.onInstanceUpdate?.(bindingInstanceId, bindingRule.target, mappedValue);
               } else {
-                onInstanceUpdate?.('scene', bindingRule.target, mappedValue);
+                callbacksRef.current.onInstanceUpdate?.('scene', bindingRule.target, mappedValue);
               }
+              const updateTime = Date.now() - updateStartTime;
+              
+              debugLog('PROCESS_DATA', `实例更新完成`, { 
+                bindingId: binding.id,
+                instanceId: bindingInstanceId,
+                target: bindingRule.target,
+                value: mappedValue,
+                updateTime: `${updateTime}ms`
+              });
               
               // 缓存数据
               setBindingDataCache(prev => new Map(prev).set(`${binding.id}_${bindingRule.target}`, {
@@ -146,18 +207,35 @@ export const usePreviewMode = (options: PreviewModeOptions) => {
         }
       }
       
-      // 调用IoT数据更新回调
-      onIoTDataUpdate?.({
+      // 🔧 控制变量测试：暂时禁用IoT数据回调
+      debugLog('PROCESS_DATA', `⚠️ [测试模式] 跳过IoT数据回调`, { 
         bindingId: binding.id,
-        rawData,
-        processedData: processedData.data,
-        timestamp: Date.now()
+        dataPreview: typeof rawData === 'string' ? rawData.substring(0, 50) : rawData
+      });
+      
+      // callbacksRef.current.onIoTDataUpdate?.({
+      //   bindingId: binding.id,
+      //   rawData,
+      //   processedData: processedData.data,
+      //   timestamp: Date.now()
+      // });
+      
+      const totalProcessTime = Date.now() - processStartTime;
+      debugLog('PROCESS_DATA', `IoT数据处理完成`, { 
+        bindingId: binding.id,
+        totalProcessTime: `${totalProcessTime}ms`,
+        timestamp: new Date().toISOString()
       });
       
     } catch (error: any) {
-      debugLog('PROCESS_DATA', `IoT数据处理失败`, { bindingId: binding.id, error: error.message });
+      const errorTime = Date.now() - processStartTime;
+      debugLog('PROCESS_DATA', `IoT数据处理失败`, { 
+        bindingId: binding.id, 
+        error: error.message,
+        errorTime: `${errorTime}ms`
+      });
     }
-  }, [instanceId, onInstanceUpdate, onIoTDataUpdate]);
+  }, [instanceId]); // 🔧 移除回调依赖，避免频繁重建
 
   /**
    * 根据协议类型和数据类型解析source路径
@@ -514,8 +592,28 @@ export const usePreviewMode = (options: PreviewModeOptions) => {
       if (connection.client) {
         switch (connection.protocol) {
           case IoTProtocolType.MQTT:
-            if (connection.client.end) {
-              connection.client.end(true);
+            // 🔧 强化MQTT客户端清理
+            try {
+              // 先移除所有事件监听器，避免在断开过程中触发事件
+              if (connection.client.removeAllListeners) {
+                connection.client.removeAllListeners();
+              }
+              
+              // 强制结束连接（force=true立即关闭）
+              if (connection.client.end) {
+                connection.client.end(true);
+              }
+              
+              // 额外保险：如果还有连接，直接销毁
+              if (connection.client.destroy) {
+                setTimeout(() => {
+                  if (connection.client && connection.client.destroy) {
+                    connection.client.destroy();
+                  }
+                }, 100);
+              }
+            } catch (error: any) {
+              debugLog('POOL_DISCONNECT', `MQTT断开异常`, { sourceId, error: error.message });
             }
             break;
           case IoTProtocolType.WEBSOCKET:
@@ -530,6 +628,9 @@ export const usePreviewMode = (options: PreviewModeOptions) => {
             }
             break;
         }
+        
+        // 清空客户端引用
+        connection.client = null;
       }
       
       connection.isConnected = false;
@@ -538,6 +639,10 @@ export const usePreviewMode = (options: PreviewModeOptions) => {
         delete newStatus[sourceId];
         return newStatus;
       });
+      
+      // 🔧 清理连接状态追踪
+      connectingSourcesRef.current.delete(sourceId);
+      connectedSourcesRef.current.delete(sourceId);
       
       debugLog('POOL_DISCONNECT', `断开成功`, { sourceId });
       
@@ -550,6 +655,7 @@ export const usePreviewMode = (options: PreviewModeOptions) => {
    * 处理从连接池收到的数据
    */
   const handlePoolData = useCallback(async (sourceId: string, rawData: any, topic?: string) => {
+    const startTime = Date.now();
     const pool = connectionPoolRef.current;
     const connection = pool.connections.get(sourceId);
     
@@ -562,7 +668,9 @@ export const usePreviewMode = (options: PreviewModeOptions) => {
       sourceId, 
       bindingCount: connection.bindings.length,
       topic,
-      dataPreview: typeof rawData === 'string' ? rawData.substring(0, 100) : rawData
+      dataPreview: typeof rawData === 'string' ? rawData.substring(0, 100) : rawData,
+      startTime,
+      timestamp: new Date(startTime).toISOString()
     });
     
     // 更新连接的最后数据时间
@@ -571,7 +679,15 @@ export const usePreviewMode = (options: PreviewModeOptions) => {
     // 处理所有使用此连接的绑定
     for (const binding of connection.bindings) {
       try {
+        const bindingStartTime = Date.now();
         await processIoTDataAndUpdateInstance(binding, rawData, topic);
+        const bindingTime = Date.now() - bindingStartTime;
+        
+        debugLog('POOL_DATA', `绑定处理完成`, { 
+          sourceId, 
+          bindingId: binding.id,
+          bindingTime: `${bindingTime}ms`
+        });
       } catch (error: any) {
         debugLog('POOL_DATA', `处理绑定失败`, { 
           sourceId, 
@@ -580,32 +696,111 @@ export const usePreviewMode = (options: PreviewModeOptions) => {
         });
       }
     }
-  }, []);
+    
+    const totalTime = Date.now() - startTime;
+    debugLog('POOL_DATA', `数据处理完成`, { 
+      sourceId, 
+      totalTime: `${totalTime}ms`,
+      bindingCount: connection.bindings.length
+    });
+  }, [processIoTDataAndUpdateInstance]); // 🔧 现在processIoTDataAndUpdateInstance稳定了
 
   /**
    * 连接MQTT到连接池
    */
   const connectMQTTToPool = useCallback(async (sourceId: string, connection: IoTConnection): Promise<void> => {
+    // 🔧 防止React Strict Mode双重渲染导致重复连接
+    if (connectingSourcesRef.current.has(sourceId) || connectedSourcesRef.current.has(sourceId)) {
+      debugLog('MQTT_POOL', `连接已存在，跳过重复连接`, { 
+        sourceId, 
+        isConnecting: connectingSourcesRef.current.has(sourceId),
+        isConnected: connectedSourcesRef.current.has(sourceId)
+      });
+      return;
+    }
+    
+    // 标记为连接中
+    connectingSourcesRef.current.add(sourceId);
+    
     const config = connection.config;
     
     // 创建MQTT客户端
     const mqtt = await import('mqtt');
     const protocol = config.use_tls ? 'wss' : 'ws';
     const websocketPath = config.websocket_path || '/mqtt';
-    const brokerUrl = `${protocol}://${config.hostname}:${config.port}${websocketPath}`;
+    
+    // WebSocket端口转换逻辑
+    let wsPort = config.port;
+    if (config.port === 1883) {
+      wsPort = 8083; // MQTT over WebSocket
+    } else if (config.port === 8883) {
+      wsPort = 8084; // MQTT over WebSocket (TLS)
+    }
+    
+    const brokerUrl = `${protocol}://${config.hostname}:${wsPort}${websocketPath}`;
+    
+    // 🔧 修复：确保ClientId绝对唯一，避免多客户端冲突
+    const timestamp = Date.now();
+    const randomPart1 = Math.random().toString(36).substr(2, 9);
+    const randomPart2 = Math.random().toString(36).substr(2, 9);
+    const processId = Math.floor(Math.random() * 10000);
+    const uniqueClientId = `${config.client_id || `iot_pool_${sourceId}`}_${timestamp}_${processId}_${randomPart1}_${randomPart2}`;
     
     const client = mqtt.default.connect(brokerUrl, {
-      clientId: config.client_id || `iot_pool_${sourceId}`,
+      clientId: uniqueClientId,
       username: config.username,
       password: config.password,
       keepalive: config.keep_alive || 60,
-      clean: config.clean_session !== false,
+      clean: true, // 🔧 强制使用clean session
       connectTimeout: (config.connection_timeout || 10) * 1000,
+      reconnectPeriod: 1000, // 1秒重连间隔
+      // 🔧 移除queueQoSZero配置，使用默认值
+    });
+    
+    debugLog('MQTT_POOL', `MQTT客户端配置`, { 
+      sourceId,
+      brokerUrl,
+      clientId: uniqueClientId,
+      keepalive: config.keep_alive || 60,
+      clean: config.clean_session !== false
     });
     
     return new Promise((resolve, reject) => {
       client.on('connect', () => {
-        debugLog('MQTT_POOL', `MQTT连接成功`, { sourceId });
+        const connectTime = Date.now();
+        debugLog('MQTT_POOL', `MQTT连接成功`, { sourceId, timestamp: new Date(connectTime).toISOString() });
+        
+        // 🔧 更新连接状态追踪
+        connectingSourcesRef.current.delete(sourceId);
+        connectedSourcesRef.current.add(sourceId);
+        
+        // 记录连接稳定性
+        const stability = connectionStabilityRef.current.get(sourceId) || { 
+          connectTime: 0, 
+          disconnectCount: 0, 
+          lastDisconnect: 0 
+        };
+        
+        // 如果距离上次断开时间很短，说明连接不稳定
+        if (stability.lastDisconnect > 0) {
+          const reconnectInterval = connectTime - stability.lastDisconnect;
+          if (reconnectInterval < 30000) { // 30秒内重连
+            debugLog('MQTT_POOL', `⚠️ 连接不稳定`, { 
+              sourceId, 
+              reconnectInterval: `${reconnectInterval}ms`,
+              disconnectCount: stability.disconnectCount 
+            });
+          }
+        }
+        
+        connectionStabilityRef.current.set(sourceId, {
+          connectTime,
+          disconnectCount: stability.disconnectCount,
+          lastDisconnect: stability.lastDisconnect
+        });
+        
+        connection.isConnected = true;
+        setPoolStatus(prev => ({ ...prev, [sourceId]: true }));
         
         // 收集所有需要订阅的主题
         const topics = new Set<string>();
@@ -637,22 +832,98 @@ export const usePreviewMode = (options: PreviewModeOptions) => {
         }
         
         connection.client = client;
+        
+        // 检查是否有多个客户端连接同一个broker
+        debugLog('MQTT_POOL', `客户端实例信息`, { 
+          sourceId,
+          clientId: uniqueClientId,
+          topics: Array.from(topics),
+          totalConnections: connectionPoolRef.current.connections.size
+        });
+        
         resolve();
       });
       
       client.on('message', async (topic, payload, packet) => {
+        const receiveTime = Date.now();
         const message = payload.toString();
-        debugLog('MQTT_POOL', `收到消息`, { sourceId, topic, messageLength: message.length });
+        
+        // 跟踪消息频率
+        const counterKey = `${sourceId}_${topic}`;
+        const counter = messageCounterRef.current.get(counterKey) || { count: 0, lastReset: receiveTime };
+        
+        // 每10秒重置计数器
+        if (receiveTime - counter.lastReset > 10000) {
+          const messagesPerSecond = counter.count / ((receiveTime - counter.lastReset) / 1000);
+          debugLog('MQTT_POOL', `消息频率统计`, { 
+            sourceId, 
+            topic,
+            messagesIn10s: counter.count,
+            avgPerSecond: messagesPerSecond.toFixed(2),
+            period: `${(receiveTime - counter.lastReset) / 1000}s`
+          });
+          counter.count = 0;
+          counter.lastReset = receiveTime;
+        }
+        
+        counter.count++;
+        messageCounterRef.current.set(counterKey, counter);
+        
+        debugLog('MQTT_POOL', `收到消息`, { 
+          sourceId, 
+          topic, 
+          messageLength: message.length,
+          receiveTime,
+          timestamp: new Date(receiveTime).toISOString(),
+          messageCount: counter.count
+        });
+        
+        const startProcessTime = Date.now();
         await handlePoolData(sourceId, message, topic);
+        const processTime = Date.now() - startProcessTime;
+        
+        debugLog('MQTT_POOL', `消息处理完成`, { 
+          sourceId, 
+          topic, 
+          processTime: `${processTime}ms`,
+          totalTime: `${Date.now() - receiveTime}ms`
+        });
       });
       
       client.on('error', (error) => {
         debugLog('MQTT_POOL', `连接错误`, { sourceId, error: error.message });
+        
+        // 🔧 连接失败时清理状态
+        connectingSourcesRef.current.delete(sourceId);
+        connectedSourcesRef.current.delete(sourceId);
+        
         reject(error);
       });
       
       client.on('close', () => {
-        debugLog('MQTT_POOL', `连接关闭`, { sourceId });
+        const closeTime = Date.now();
+        debugLog('MQTT_POOL', `连接关闭`, { sourceId, timestamp: new Date(closeTime).toISOString() });
+        
+        // 🔧 连接关闭时清理状态
+        connectingSourcesRef.current.delete(sourceId);
+        connectedSourcesRef.current.delete(sourceId);
+        
+        // 更新连接稳定性统计
+        const stability = connectionStabilityRef.current.get(sourceId);
+        if (stability) {
+          const connectionDuration = closeTime - stability.connectTime;
+          debugLog('MQTT_POOL', `连接持续时间`, { 
+            sourceId, 
+            duration: `${connectionDuration}ms` 
+          });
+          
+          connectionStabilityRef.current.set(sourceId, {
+            ...stability,
+            disconnectCount: stability.disconnectCount + 1,
+            lastDisconnect: closeTime
+          });
+        }
+        
         connection.isConnected = false;
         setPoolStatus(prev => ({ ...prev, [sourceId]: false }));
       });
@@ -751,8 +1022,10 @@ export const usePreviewMode = (options: PreviewModeOptions) => {
     }
   }, [handlePoolData, httpRequestHook]);
 
-  // ====================  原有WebSocket逻辑 ====================
-
+  // ====================  已注释的过时WebSocket逻辑 ====================
+  // 🔧 已移除：现在使用前端直连MQTT策略，不再需要后端WebSocket中转
+  
+  /*
   const connectAnimationWebSocket = () => {
     if (animationWsRef.current?.readyState === WebSocket.OPEN) {
       return;
@@ -858,17 +1131,23 @@ export const usePreviewMode = (options: PreviewModeOptions) => {
     setIsIoTConnected(false);
     setConnectionError(null);
   };
+  */
 
   const startPreviewMode = async () => {
-    debugLog('PREVIEW', '启动预览模式');
+    const startTime = Date.now();
+    debugLog('PREVIEW', '🚀 启动预览模式调用', { 
+      enabled, 
+      sceneId, 
+      instanceId, 
+      timestamp: new Date(startTime).toISOString() 
+    });
     
     if (viewerRef?.current) {
       iotAnimationService.initialize(viewerRef.current);
     }
     
-    // 启动原有的WebSocket连接
-    connectAnimationWebSocket();
-    connectIoTWebSocket();
+    // 🔧 已移除过时的后端WebSocket连接
+    // 现在使用前端直连MQTT策略
     
     // 启动IoT绑定功能
     try {
@@ -891,8 +1170,7 @@ export const usePreviewMode = (options: PreviewModeOptions) => {
   const stopPreviewMode = () => {
     debugLog('PREVIEW', '停止预览模式');
     
-    // 停止原有的WebSocket连接
-    disconnectWebSockets();
+    // 🔧 已移除：停止原有的WebSocket连接
     
     // 停止连接池
     stopConnectionPool();
@@ -907,12 +1185,18 @@ export const usePreviewMode = (options: PreviewModeOptions) => {
   };
 
   // 当IoT绑定和连接配置都获取完成后，构建并启动连接池
+  // 🔧 稳定化连接池初始化逻辑，避免频繁重建
+  const connectionConfigsInitialized = useMemo(() => connectionConfigs.size > 0, [connectionConfigs.size]);
+  const hasBindings = useMemo(() => iotBindings.length > 0, [iotBindings.length]);
+  
   useEffect(() => {
-    if (enabled && iotBindings.length > 0 && connectionConfigs.size > 0) {
+    if (enabled && hasBindings && connectionConfigsInitialized) {
       debugLog('EFFECT', '检测到IoT绑定和配置已获取，构建并启动连接池');
       
       const initializePool = async () => {
         try {
+          // 🔧 先停止旧的连接池，避免多个MQTT客户端同时运行
+          await stopConnectionPool();
           await buildConnectionPool();
           await startConnectionPool();
         } catch (error: any) {
@@ -923,7 +1207,7 @@ export const usePreviewMode = (options: PreviewModeOptions) => {
       
       initializePool();
     }
-  }, [enabled, iotBindings.length, connectionConfigs.size, buildConnectionPool, startConnectionPool]);
+  }, [enabled, hasBindings, connectionConfigsInitialized, stopConnectionPool, buildConnectionPool, startConnectionPool]);
 
   useEffect(() => {
     if (enabled) {
@@ -937,9 +1221,52 @@ export const usePreviewMode = (options: PreviewModeOptions) => {
     };
   }, [enabled, viewerRef]);
 
+  // 🔧 已移除：WebSocket清理逻辑
+  // 🔧 组件卸载时确保彻底清理所有连接
   useEffect(() => {
     return () => {
-      disconnectWebSockets();
+      debugLog('CLEANUP', '组件卸载，清理所有连接');
+      
+      // 停止连接池
+      const pool = connectionPoolRef.current;
+      for (const [sourceId] of pool.connections) {
+        try {
+          const connection = pool.connections.get(sourceId);
+          if (connection?.client) {
+            if (connection.protocol === IoTProtocolType.MQTT) {
+              // 强制断开MQTT连接
+              if (connection.client.removeAllListeners) {
+                connection.client.removeAllListeners();
+              }
+              if (connection.client.end) {
+                connection.client.end(true);
+              }
+            } else if (connection.protocol === IoTProtocolType.WEBSOCKET) {
+              if (connection.client.close) {
+                connection.client.close();
+              }
+            }
+          }
+        } catch (error) {
+          console.warn('清理连接时出错:', error);
+        }
+      }
+      
+      // 清空连接池和状态追踪
+      pool.connections.clear();
+      pool.bindingGroups.clear();
+      connectingSourcesRef.current.clear();
+      connectedSourcesRef.current.clear();
+      
+      // 断开WebSocket连接
+      if (animationWsRef.current) {
+        animationWsRef.current.close();
+        animationWsRef.current = null;
+      }
+      if (iotWsRef.current) {
+        iotWsRef.current.close();
+        iotWsRef.current = null;
+      }
     };
   }, []);
 
@@ -975,12 +1302,7 @@ export const usePreviewMode = (options: PreviewModeOptions) => {
       if (enabled) {
         debugLog('RECONNECT', '重新连接所有服务');
         
-        // 重连原有WebSocket
-        disconnectWebSockets();
-        setTimeout(() => {
-          connectAnimationWebSocket();
-          connectIoTWebSocket();
-        }, 1000);
+        // 🔧 已移除过时的后端WebSocket重连逻辑
         
         // 重连连接池
         stopConnectionPool();
